@@ -1,32 +1,117 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>lab-duty</title>
+  <!-- TailwindCSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .line-clamp-3{ display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+    .droptarget{ outline: 2px dashed rgba(100,116,139,0.5); outline-offset: -6px; }
+    .holiday{ background-image: repeating-linear-gradient(45deg, rgba(100,116,139,.1) 0 10px, transparent 10px 20px); }
+    @media print { .no-print{ display:none !important; } }
+  </style>
 </head>
-<body class="max-w-3xl mx-auto p-4">
-  <h1 class="text-2xl font-semibold mb-4">lab-duty</h1>
+<body class="min-h-screen bg-gradient-to-b from-white to-slate-100 text-slate-800">
+  <!-- HEADER -->
+  <header class="sticky top-0 z-10 backdrop-blur bg-white/70 border-b">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+      <h1 class="text-xl font-semibold">lab-duty</h1>
 
-  <div id="whoami" class="mb-4 text-sm text-slate-600">—</div>
+      <!-- Identity -->
+      <div class="ml-auto flex items-center gap-2 no-print">
+        <label class="text-xs text-slate-500">I am:</label>
+        <select id="identitySelect" class="px-2 py-1.5 rounded-lg border bg-white text-sm min-w-[140px]"></select>
+        <span id="whoami" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border text-sm">—</span>
+        <button id="btnAdmin" class="px-3 py-1.5 rounded-lg border hover:bg-slate-50 text-sm">Admin</button>
+        <button id="btnAdminExit" class="hidden px-3 py-1.5 rounded-lg border hover:bg-slate-50 text-sm">× Exit</button>
+      </div>
+    </div>
+  </header>
 
-  <section class="mb-6">
-    <h2 class="font-semibold mb-2">Post a message</h2>
-    <textarea id="msgText" class="w-full border rounded p-2" rows="3" placeholder="Write a short update…"></textarea>
-    <button id="btnPublish" class="mt-2 px-3 py-1.5 border rounded">Publish</button>
-  </section>
+  <!-- MAIN -->
+  <main class="max-w-6xl mx-auto px-4 py-6 grid grid-cols-12 gap-6">
+    <!-- LEFT: calendar + toolbar -->
+    <section class="col-span-12 lg:col-span-8">
+      <div class="flex items-center gap-2 mb-3 no-print">
+        <button id="prevMonth" class="px-3 py-1.5 rounded-lg border hover:bg-slate-50">← Prev</button>
+        <div id="monthTitle" class="flex-1 text-center text-lg font-medium">—</div>
+        <button id="nextMonth" class="px-3 py-1.5 rounded-lg border hover:bg-slate-50">Next →</button>
+      </div>
 
-  <section>
-    <h2 class="font-semibold mb-2">Messages</h2>
-    <div id="feed" class="space-y-3"></div>
-  </section>
+      <div class="flex items-center gap-3 mb-4 text-sm no-print">
+        <label class="inline-flex items-center gap-2"><input id="toggleSwap" type="checkbox" class="rounded"/> Show swap-needed only</label>
+        <button id="btnExportCSV" class="px-3 py-1.5 rounded-lg border hover:bg-slate-50">Export CSV</button>
+        <button id="btnPrint" class="px-3 py-1.5 rounded-lg border hover:bg-slate-50">Print</button>
+      </div>
 
+      <div class="grid grid-cols-5 text-center text-xs font-semibold text-slate-500 mb-1">
+        <div class="py-2">Mon</div><div class="py-2">Tue</div><div class="py-2">Wed</div><div class="py-2">Thu</div><div class="py-2">Fri</div>
+      </div>
+
+      <div id="calendar" class="grid grid-cols-5 gap-2"></div>
+
+      <p class="text-xs text-slate-500 mt-4 flex items-center gap-2"><span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span> Days needing swap are highlighted. Click your chip to mark “can’t make it”.</p>
+    </section>
+
+    <!-- RIGHT: admin/team & supplies checklist -->
+    <aside class="col-span-12 lg:col-span-4 space-y-6">
+      <div id="teamPanel" class="rounded-2xl border bg-white p-4 hidden">
+        <div class="flex items-center gap-2 mb-2">
+          <h2 class="font-semibold">Team</h2>
+          <span id="adminBadge" class="ml-auto text-[11px] px-2 py-0.5 rounded-full border">Admin</span>
+        </div>
+        <p class="text-xs text-slate-500 mb-3">Drag names onto a day (admin only). Click × on a chip to remove.</p>
+        <div id="teamChips" class="flex flex-wrap gap-2"></div>
+      </div>
+
+      <div class="rounded-2xl border bg-white p-4">
+        <h2 class="font-semibold mb-2">Supplies checklist</h2>
+        <p id="checklistInfo" class="text-xs text-slate-500 mb-3"></p>
+        <div id="checklist" class="space-y-1"></div>
+        <button id="btnDone" class="mt-3 w-full px-3 py-2 rounded-lg border hover:bg-slate-50 hidden">I’m done for today ✅</button>
+      </div>
+
+      <div class="rounded-2xl border bg-white p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <h2 class="font-semibold">Messages</h2>
+          <span class="text-[11px] text-slate-500">(text only)</span>
+        </div>
+        <textarea id="msgText" class="w-full border rounded-lg p-2 text-sm" rows="3" placeholder="Write a short update… (swap needed, broken device, etc.)"></textarea>
+        <button id="btnPublish" class="mt-2 w-full px-3 py-2 rounded-lg border hover:bg-slate-50">Publish</button>
+        <hr class="my-3"/>
+        <div id="feed" class="space-y-3"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="max-w-6xl mx-auto px-4 py-8 text-xs text-slate-500">
+    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v1
+  </footer>
+
+  <!-- Firebase (modular) via CDN -->
   <script type="module">
-    // 1) Firebase init
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-    import { getAuth, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, updateDoc, doc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    /**********************
+     * 0) CONFIG — EDIT!  *
+     **********************/
+    // Team roster
+    const TEAM = [
+      { id: 'slava', name: 'Slava' },
+      { id: 'vanina', name: 'Vanina' },
+      { id: 'helene', name: 'Helene' },
+      { id: 'eva', name: 'Eva' },
+      { id: 'guillaume', name: 'Guillaume' },
+      { id: 'gaetan', name: 'Gaetan' },
+      { id: 'mathieu', name: 'Mathieu' },
+      { id: 'luc', name: 'Luc' },
+      { id: 'elise', name: 'Elise' },
+      { id: 'jia', name: 'Jia' },
+    ];
+    const ADMIN_CODE = 'admin-code-0'; // change me
 
+    // Firebase
     const FIREBASE_CONFIG = {
       apiKey: "AIzaSyAIG0xtx8GrdTYC7wVvpG74hB8ILvDnsgA",
       authDomain: "lab-duty-micro.firebaseapp.com",
@@ -37,57 +122,432 @@
       measurementId: "G-K6RPGETF8B"
     };
 
+    // Checklist items
+    const CHECKITEMS = [
+      { id:'benches', label:'Wipe benches' },
+      { id:'trash', label:'Empty trash (non-bio)' },
+      { id:'biohaz', label:'Biohazard bin' },
+      { id:'floor', label:'Sweep/mop floor' },
+      { id:'hoods', label:'Clean biosafety hoods surfaces' },
+      { id:'incub', label:'Check CO₂ incubator trays' },
+      { id:'stock', label:'Refill towels/soap/ethanol' },
+    ];
+
+    /**********************
+     * 1) Firebase init   *
+     **********************/
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, query, where, orderBy, serverTimestamp, addDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
     const app = initializeApp(FIREBASE_CONFIG);
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    // 2) Anonymous sign-in
-    onAuthStateChanged(auth, async (u) => {
-      if (!u) await signInAnonymously(auth);
-      document.getElementById('whoami').textContent = u ? `Signed in: ${u.uid.slice(0,8)}…` : '—';
-    });
+    /**********************
+     * 2) Helpers         *
+     **********************/
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+    const toKey = (d) => {
+      // Local YYYY-MM-DD (no UTC issues)
+      const y=d.getFullYear(); const m=('0'+(d.getMonth()+1)).slice(-2); const dd=('0'+d.getDate()).slice(-2);
+      return `${y}-${m}-${dd}`;
+    };
+    const fromKey = (k) => { const [y,m,dd]=k.split('-').map(Number); return new Date(y,m-1,dd); };
+    const addDays = (d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+    const startOfMonth = (d)=> new Date(d.getFullYear(), d.getMonth(), 1);
+    const endOfMonth   = (d)=> new Date(d.getFullYear(), d.getMonth()+1, 0);
 
-    // 3) Publish message (без картинок)
-    document.getElementById('btnPublish').addEventListener('click', async ()=>{
-      const text = document.getElementById('msgText').value.trim();
-      if(!text) return alert('Empty');
-      const u = auth.currentUser;
+    function gridRangeWeekdays(cursor){
+      const start = startOfMonth(cursor);
+      const end = endOfMonth(cursor);
+      const s = addDays(start, -((start.getDay()+6)%7));
+      const e = addDays(end, (5 - ((end.getDay()+6)%7) + 7)%7);
+      const days=[]; let cur=new Date(s);
+      while(cur<=e){ const dow=(cur.getDay()+6)%7; if(dow<5) days.push(new Date(cur)); cur=addDays(cur,1); }
+      return { days, start, end };
+    }
+
+    function nameById(id){ if(!id) return null; return TEAM.find(t=>t.id===id)?.name || null; }
+    function toCSV(rows){ return rows.map(r=> r.map(v=>{ const s=(v??'').toString(); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }).join(',')).join('\n'); }
+
+    /**********************
+     * 3) State           *
+     **********************/
+    let cursor = startOfMonth(new Date());
+    let meId = localStorage.getItem('labduty_meId');
+    let adminOK = false;
+
+    // key => { date, assignees:[id], swapRequestedIds:[id], note?: string, checklist?: {taskId: whoId}, doneAt?: ts }
+    const daysMap = {};
+    let monthUnsub = null;
+
+    function setMe(id){ meId=id; if(id) localStorage.setItem('labduty_meId',id); else localStorage.removeItem('labduty_meId'); renderHeader(); paintAll(); renderChecklist(); }
+
+    function renderHeader(){
+      const sel = $('#identitySelect');
+      sel.innerHTML = '<option value="">— choose —</option>' + TEAM.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+      sel.value = meId||'';
+      $('#whoami').textContent = meId ? (nameById(meId)+ ' ✓') : '—';
+      $('#teamPanel').classList.toggle('hidden', !adminOK);
+      $('#btnAdmin').classList.toggle('hidden', adminOK);
+      $('#btnAdminExit').classList.toggle('hidden', !adminOK);
+    }
+
+    /**********************
+     * 4) Firestore IO    *
+     **********************/
+    async function ensureAnon(){ if(!auth.currentUser) await signInAnonymously(auth); }
+
+    function monthKeyBounds(d){
+      const a = new Date(d.getFullYear(), d.getMonth(), 1);
+      const b = new Date(d.getFullYear(), d.getMonth()+1, 0);
+      return [toKey(a), toKey(b)];
+    }
+
+    function subscribeMonth(){
+      if(monthUnsub) monthUnsub();
+      const [a,b] = monthKeyBounds(cursor);
+      const qy = query(collection(db,'days'), where('date','>=',a), where('date','<=',b), orderBy('date','asc'));
+      monthUnsub = onSnapshot(qy, (qs)=>{
+        qs.forEach(docSnap=>{ const d = migrateDay(docSnap.data()); daysMap[docSnap.id] = d; });
+        paintAll(); renderChecklist();
+      });
+    }
+
+    function migrateDay(d){
+      if(!d) return null;
+      const out = { date:d.date, assignees:[], swapRequestedIds:[], note:d.note||'', checklist:d.checklist||{}, doneAt:d.doneAt||null, updatedAt:d.updatedAt||null };
+      if(Array.isArray(d.assignees)) out.assignees = d.assignees; else if(d.assigneeId) out.assignees = d.assigneeId ? [d.assigneeId] : [];
+      if(Array.isArray(d.swapRequestedIds)) out.swapRequestedIds = d.swapRequestedIds; else if(d.swapRequested) out.swapRequestedIds = d.assigneeId ? [d.assigneeId] : [];
+      return out;
+    }
+
+    async function setAssignees(dayKey, ids){
+      const ref = doc(db,'days',dayKey);
+      const snap = await getDoc(ref);
+      const base = snap.exists()? migrateDay(snap.data()) : { date:dayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+      await setDoc(ref, { ...base, assignees: ids, updatedAt: serverTimestamp() });
+    }
+
+    async function toggleSwap(dayKey, whoId){
+      const ref = doc(db,'days',dayKey);
+      const snap = await getDoc(ref); if(!snap.exists()) return;
+      const d = migrateDay(snap.data());
+      const set = new Set(d.swapRequestedIds);
+      if(set.has(whoId)) set.delete(whoId); else set.add(whoId);
+      await updateDoc(ref, { swapRequestedIds:[...set], updatedAt: serverTimestamp() });
+    }
+
+    async function saveChecklist(todayKey, checklist){
+      const ref = doc(db,'days',todayKey);
+      const snap = await getDoc(ref);
+      const base = snap.exists()? migrateDay(snap.data()) : { date:todayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+      await setDoc(ref,{ ...base, checklist, updatedAt: serverTimestamp() });
+    }
+
+    async function markDone(todayKey, whoId){
+      const ref = doc(db,'days',todayKey);
+      const snap = await getDoc(ref);
+      const base = snap.exists()? migrateDay(snap.data()) : { date:todayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+      await setDoc(ref,{ ...base, doneAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    }
+
+    // Messages
+    function subscribeMessages(){
+      const qy = query(collection(db,'messages'), orderBy('createdAt','desc'));
+      onSnapshot(qy, (qs)=>{
+        const cutoff = Date.now() - 24*3600*1000;
+        const feed = $('#feed'); feed.innerHTML='';
+        qs.forEach(s=>{
+          const m = s.data(); const id = s.id;
+          const resolved = m.resolvedAt?.toMillis ? m.resolvedAt.toMillis() : (m.resolvedAt? new Date(m.resolvedAt).getTime() : null);
+          if(resolved && resolved < cutoff) return; // hide resolved >24h
+          const card = document.createElement('div'); card.className='rounded-xl border p-3 bg-white';
+          card.innerHTML = `
+            <div class="flex items-start gap-2">
+              <div class="text-sm font-medium">${m.authorName||'Anon'}</div>
+              <div class="ml-auto text-xs text-slate-500">${m.createdAt?.toDate? m.createdAt.toDate().toLocaleString() : ''}</div>
+            </div>
+            <div class="mt-2 text-sm whitespace-pre-wrap">${(m.text||'').replace(/</g,'&lt;')}</div>
+            <div class="mt-2 flex items-center gap-2">
+              <button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="resolve" data-id="${id}">${m.resolvedAt? 'Resolved ✓':'Mark resolved'}</button>
+              <details class="ml-auto">
+                <summary class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50 inline">Comments</summary>
+                <div class="mt-2 space-y-2" id="cm_${id}"></div>
+                <div class="mt-2 flex items-center gap-2">
+                  <input class="flex-1 border rounded-lg px-2 py-1 text-sm" placeholder="Write a comment…" id="cmi_${id}">
+                  <button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="sendc" data-id="${id}">Send</button>
+                </div>
+              </details>
+            </div>`;
+          card.querySelector('button[data-act="resolve"]').onclick = async ()=>{
+            try{ await updateDoc(doc(db,'messages', id), { resolvedAt: serverTimestamp() }); }catch(e){ console.error(e); alert('Failed'); }
+          };
+          card.querySelector('button[data-act="sendc"]').onclick = async ()=>{
+            const input = card.querySelector('#cmi_'+id); const text = input.value.trim(); if(!text) return;
+            const u = auth.currentUser;
+            try{
+              await addDoc(collection(db,'messages', id, 'comments'), {
+                text, createdAt: serverTimestamp(), authorId: u?.uid||'anon', authorName: nameById(meId)||'Anon'
+              }); input.value='';
+            }catch(e){ console.error(e); alert('Failed'); }
+          };
+          feed.appendChild(card);
+          // load comments (live)
+          const cq = query(collection(db,'messages', id, 'comments'), orderBy('createdAt','asc'));
+          onSnapshot(cq, (cqs)=>{
+            const box = $('#cm_'+id); if(!box) return; box.innerHTML='';
+            cqs.forEach(cs=>{ const c = cs.data(); const row=document.createElement('div'); row.className='text-xs'; row.innerHTML=`<span class="font-medium">${(c.authorName||'Anon').replace(/</g,'&lt;')}:</span> ${(c.text||'').replace(/</g,'&lt;')} <span class="text-slate-400">${c.createdAt?.toDate? c.createdAt.toDate().toLocaleString():''}</span>`; box.appendChild(row); });
+          });
+        });
+      });
+    }
+
+    /**********************
+     * 5) Calendar UI     *
+     **********************/
+    function renderCalendar(){
+      const cal = $('#calendar'); cal.innerHTML='';
+      const { days } = gridRangeWeekdays(cursor);
+      $('#monthTitle').textContent = cursor.toLocaleDateString(undefined,{ month:'long', year:'numeric' });
+
+      const todayK = toKey(new Date());
+      days.forEach(d=>{
+        const k = toKey(d);
+        const inMonth = d.getMonth()===cursor.getMonth();
+        const isToday = k===todayK;
+        const div = document.createElement('div');
+        div.id = 'cell_'+k;
+        div.className = [
+          'rounded-2xl border p-2 min-h-[130px] flex flex-col gap-2 bg-white',
+          !inMonth? 'opacity-60':'',
+          isToday? 'ring-2 ring-slate-900':''
+        ].join(' ');
+        div.dataset.dayKey = k;
+        div.innerHTML = `
+          <div class="flex items-center justify-between gap-2">
+            <div class="text-sm font-medium">${d.getDate()}</div>
+            <div id="badges_${k}" class="flex items-center gap-1"></div>
+          </div>
+          <div id="chips_${k}" class="flex flex-wrap gap-1"></div>
+          <div id="actions_${k}" class="mt-auto pt-1 flex flex-wrap gap-1"></div>
+        `;
+
+        // Drag & drop targets (admin)
+        div.addEventListener('dragover', (e)=>{ if(!adminOK) return; e.preventDefault(); div.classList.add('droptarget'); });
+        div.addEventListener('dragleave', ()=> div.classList.remove('droptarget'));
+        div.addEventListener('drop', async (e)=>{
+          if(!adminOK) return; e.preventDefault(); div.classList.remove('droptarget');
+          const whoId = e.dataTransfer.getData('text/plain'); if(!whoId) return;
+          // optimistic update
+          const cur = (daysMap[k]?.assignees)||[];
+          if(!cur.includes(whoId)){
+            daysMap[k] = daysMap[k]||{ date:k, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+            daysMap[k].assignees = [...cur, whoId]; paintCell(k);
+            try{ await setAssignees(k, daysMap[k].assignees); }catch(err){ alert('Save failed'); console.error(err); }
+          }
+        });
+
+        cal.appendChild(div);
+      });
+
+      paintAll();
+    }
+
+    function chip(name, whoId, dayKey){
+      const span=document.createElement('span');
+      const mine = meId===whoId;
+      const needSwap = daysMap[dayKey]?.swapRequestedIds?.includes(whoId);
+      span.className = 'group inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ' + (needSwap? 'bg-amber-100 border-amber-300 text-amber-900':'bg-slate-50');
+      span.textContent = name;
+
+      // Click to toggle swap (only self)
+      span.addEventListener('click', async (e)=>{
+        e.stopPropagation(); if(!mine) return;
+        // optimistic toggle
+        const set = new Set(daysMap[dayKey]?.swapRequestedIds||[]);
+        if(set.has(whoId)) set.delete(whoId); else set.add(whoId);
+        daysMap[dayKey].swapRequestedIds = [...set]; paintCell(dayKey);
+        try{ await toggleSwap(dayKey, whoId); }catch(err){ console.error(err); alert('Failed'); }
+      });
+
+      // Remove (admin)
+      if(adminOK){
+        const x=document.createElement('button'); x.textContent='×'; x.className='ml-1 opacity-50 hover:opacity-100';
+        x.addEventListener('click', async (e)=>{
+          e.stopPropagation();
+          const cur=(daysMap[dayKey]?.assignees)||[];
+          daysMap[dayKey].assignees = cur.filter(id=>id!==whoId); paintCell(dayKey);
+          try{ await setAssignees(dayKey, daysMap[dayKey].assignees); }catch(err){ console.error(err); alert('Failed'); }
+        });
+        span.appendChild(x);
+      }
+
+      return span;
+    }
+
+    function paintCell(k){
+      const d = daysMap[k] || { assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+      const chipsEl = $('#chips_'+k);
+      const badgesEl = $('#badges_'+k);
+      const actionsEl = $('#actions_'+k);
+      if(!chipsEl||!actionsEl) return;
+
+      chipsEl.innerHTML='';
+      (d.assignees||[]).forEach(id=>{ const nm = nameById(id)||id; chipsEl.appendChild(chip(nm,id,k)); });
+
+      // badges
+      badgesEl.innerHTML='';
+      const swapCount = (d.swapRequestedIds||[]).length;
+      if(swapCount>0){ const b = document.createElement('span'); b.className='inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-800'; b.textContent = 'swap ×'+swapCount; badgesEl.appendChild(b); }
+
+      // actions (note/swap for self)
+      actionsEl.innerHTML='';
+      const mine = meId && (d.assignees||[]).includes(meId);
+      if(mine){
+        const btnSwap = document.createElement('button'); btnSwap.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50';
+        btnSwap.textContent = (d.swapRequestedIds||[]).includes(meId)? 'Cancel swap':'Need swap';
+        btnSwap.onclick = ()=>{
+          // trigger via chip click path to keep optimistic behavior
+          const fakeChip = chip('x', meId, k); fakeChip.click();
+        };
+        actionsEl.append(btnSwap);
+      }
+
+      // filtering: swap-only toggle
+      const showSwapOnly = $('#toggleSwap').checked;
+      const cell = $('#cell_'+k);
+      if(showSwapOnly){ cell.style.display = swapCount>0 ? '' : 'none'; }
+      else { cell.style.display=''; }
+    }
+
+    function paintAll(){ const { days } = gridRangeWeekdays(cursor); days.forEach(d=> paintCell(toKey(d)) ); }
+
+    /**********************
+     * 6) Identity + Admin + Team chips
+     **********************/
+    $('#identitySelect').addEventListener('change', (e)=>{ setMe(e.target.value || null); });
+
+    $('#btnAdmin').addEventListener('click', ()=>{
+      const x = prompt('Enter admin code');
+      if(x===ADMIN_CODE){ adminOK=true; alert('Admin unlocked'); renderHeader(); renderTeamChips(); }
+      else alert('Wrong code');
+    });
+    $('#btnAdminExit').addEventListener('click', ()=>{ adminOK=false; renderHeader(); });
+
+    function renderTeamChips(){
+      const box = $('#teamChips'); box.innerHTML='';
+      TEAM.forEach(t=>{
+        const el = document.createElement('div');
+        el.className='inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-white text-sm';
+        el.textContent=t.name; el.draggable = adminOK;
+        el.addEventListener('dragstart', (e)=>{ e.dataTransfer.setData('text/plain', t.id); });
+        box.appendChild(el);
+      });
+    }
+
+    /**********************
+     * 7) Month nav & query
+     **********************/
+    $('#prevMonth').addEventListener('click', ()=>{ cursor = new Date(cursor.getFullYear(), cursor.getMonth()-1, 1); renderCalendar(); subscribeMonth(); });
+    $('#nextMonth').addEventListener('click', ()=>{ cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1); renderCalendar(); subscribeMonth(); });
+    $('#toggleSwap').addEventListener('change', paintAll);
+
+    /**********************
+     * 8) Export / Print
+     **********************/
+    $('#btnExportCSV').addEventListener('click', ()=>{
+      const rows = [[ 'Date','Assignees','SwapNeeded' ]];
+      Object.values(daysMap).filter(Boolean).forEach(d=>{
+        rows.push([ d.date, (d.assignees||[]).map(nameById).filter(Boolean).join(' / '), (d.swapRequestedIds||[]).map(nameById).filter(Boolean).join(' / ') ]);
+      });
+      const csv = toCSV(rows);
+      const blob = new Blob([csv],{type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='rota-'+toKey(cursor).slice(0,7)+'.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+    $('#btnPrint').addEventListener('click', ()=> window.print());
+
+    /**********************
+     * 9) Messages (text only)
+     **********************/
+    $('#btnPublish').addEventListener('click', async ()=>{
+      await ensureAnon();
+      const text = $('#msgText').value.trim(); if(!text) return alert('Empty');
+      const author = { id: meId|| (auth.currentUser?.uid||'anon'), name: nameById(meId)||'Anon' };
       try{
         await addDoc(collection(db,'messages'), {
-          text,
-          attachments: [],               // без фото
-          createdAt: serverTimestamp(),
-          resolvedAt: null,
-          authorId: u?.uid || 'anon',
-          authorName: 'Anon',
-          kind: 'user',
-          meta: {}
+          text, attachments: [], createdAt: serverTimestamp(), resolvedAt: null,
+          authorId: author.id, authorName: author.name, kind:'user', meta:{}
         });
-        document.getElementById('msgText').value = '';
+        $('#msgText').value='';
       }catch(e){ console.error(e); alert('Failed to publish'); }
     });
 
-    // 4) Realtime feed
-    const feed = document.getElementById('feed');
-    onSnapshot(query(collection(db,'messages'), orderBy('createdAt','desc')), (qs)=>{
-      feed.innerHTML='';
-      qs.forEach(s=>{
-        const m = s.data(); const id = s.id;
-        const card = document.createElement('div');
-        card.className='border rounded p-3';
-        card.innerHTML = `
-          <div class="text-sm text-slate-500">${m.authorName||'Anon'}</div>
-          <div class="mt-1 whitespace-pre-wrap">${m.text||''}</div>
-          <div class="mt-2 flex gap-2">
-            <button class="text-xs px-2 py-1 border rounded" data-id="${id}">Mark resolved</button>
-          </div>`;
-        card.querySelector('button').onclick = async ()=>{
-          try{ await updateDoc(doc(db,'messages', id), { resolvedAt: new Date() }); }
-          catch(e){ console.error(e); alert('Failed'); }
-        };
-        feed.appendChild(card);
-      });
+    /**********************
+     * 10) Checklist (today)
+     **********************/
+    function renderChecklist(){
+      const k = toKey(new Date());
+      const d = daysMap[k] || { checklist:{}, assignees:[] };
+      const assigned = d.assignees||[];
+      const isMine = meId && assigned.includes(meId);
+      $('#checklist').innerHTML='';
+      const info = $('#checklistInfo');
+      if(isMine){
+        info.textContent = `You are on duty today (${assigned.map(nameById).filter(Boolean).join(' / ')})`;
+        CHECKITEMS.forEach(it=>{
+          const row=document.createElement('label'); row.className='flex items-center gap-2 text-sm';
+          const cb=document.createElement('input'); cb.type='checkbox'; cb.className='rounded'; cb.checked=!!d.checklist?.[it.id];
+          cb.addEventListener('change', async ()=>{
+            const cc = { ...(daysMap[k]?.checklist||{}) };
+            cc[it.id] = cb.checked ? (meId||true) : null;
+            try{ await saveChecklist(k, cc); }catch(e){ console.error(e); alert('Failed to save'); }
+          });
+          row.append(cb, document.createTextNode(it.label));
+          $('#checklist').appendChild(row);
+        });
+        $('#btnDone').classList.remove('hidden');
+      }else{
+        info.textContent = `Duty today: ${assigned.map(nameById).filter(Boolean).join(' / ') || '—'}`;
+        $('#btnDone').classList.add('hidden');
+      }
+    }
+
+    $('#btnDone').addEventListener('click', async ()=>{
+      const k = toKey(new Date());
+      const d = daysMap[k] || { assignees:[], checklist:{} };
+      const assigned = d.assignees||[];
+      const isMine = meId && assigned.includes(meId);
+      if(!isMine){
+        const ok = confirm('It is not your turn today. Are you sure you completed everything?');
+        if(!ok) return;
+      }
+      try{
+        await markDone(k, meId||'anon');
+        // If all items checked and isMine — publish a system message
+        const allOk = CHECKITEMS.every(it => d.checklist && d.checklist[it.id]);
+        if(allOk && isMine){
+          await addDoc(collection(db,'messages'), {
+            text: `✅ ${nameById(meId)||'Someone'} completed the supplies checklist for ${k}. Great job!`,
+            attachments: [], createdAt: serverTimestamp(), resolvedAt: null,
+            authorId: meId||'anon', authorName: nameById(meId)||'Anon', kind:'system', meta:{ type:'checklist_done', date:k }
+          });
+        }
+      }catch(e){ console.error(e); alert('Failed to mark done'); }
     });
+
+    /**********************
+     * 11) Boot           *
+     **********************/
+    onAuthStateChanged(auth, async (u)=>{ if(!u) await signInAnonymously(auth); });
+    $('#identitySelect').addEventListener('change', (e)=> setMe(e.target.value || null));
+    renderHeader();
+    (function initCalendar(){ renderCalendar(); subscribeMonth(); })();
+    subscribeMessages();
+    setInterval(renderChecklist, 5000); renderChecklist();
   </script>
 </body>
 </html>
