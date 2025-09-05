@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>lab-duty</title>
-  <!-- TailwindCSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .line-clamp-3{ display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
@@ -14,7 +13,6 @@
   </style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-white to-slate-100 text-slate-800">
-  <!-- HEADER -->
   <header class="sticky top-0 z-10 backdrop-blur bg-white/70 border-b">
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
@@ -22,18 +20,15 @@
 
       <!-- Identity -->
       <div class="ml-auto flex items-center gap-2 no-print">
-        <label class="text-xs text-slate-500">I am:</label>
-        <select id="identitySelect" class="px-2 py-1.5 rounded-lg border bg-white text-sm min-w-[140px]"></select>
+        <label id="labelIAm" class="text-xs text-slate-500">I am:</label>
+        <select id="identitySelect" class="px-2 py-1.5 rounded-lg border bg-white text-sm min-w-[180px]"></select>
         <span id="whoami" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border text-sm">—</span>
-        <button id="btnAdmin" class="px-3 py-1.5 rounded-lg border hover:bg-slate-50 text-sm">Admin</button>
         <button id="btnAdminExit" class="hidden px-3 py-1.5 rounded-lg border hover:bg-slate-50 text-sm">× Exit</button>
       </div>
     </div>
   </header>
 
-  <!-- MAIN -->
   <main class="max-w-6xl mx-auto px-4 py-6 grid grid-cols-12 gap-6">
-    <!-- LEFT: calendar + toolbar -->
     <section class="col-span-12 lg:col-span-8">
       <div class="flex items-center gap-2 mb-3 no-print">
         <button id="prevMonth" class="px-3 py-1.5 rounded-lg border hover:bg-slate-50">← Prev</button>
@@ -53,10 +48,12 @@
 
       <div id="calendar" class="grid grid-cols-5 gap-2"></div>
 
-      <p class="text-xs text-slate-500 mt-4 flex items-center gap-2"><span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span> Days needing swap are highlighted. Click your chip to mark “can’t make it”.</p>
+      <p class="text-xs text-slate-500 mt-4 flex items-center gap-2">
+        <span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
+        Days needing swap are highlighted. Click your own chip to toggle “need swap”.
+      </p>
     </section>
 
-    <!-- RIGHT: admin/team & supplies checklist -->
     <aside class="col-span-12 lg:col-span-4 space-y-6">
       <div id="teamPanel" class="rounded-2xl border bg-white p-4 hidden">
         <div class="flex items-center gap-2 mb-2">
@@ -77,7 +74,10 @@
       <div class="rounded-2xl border bg-white p-4">
         <div class="flex items-center gap-2 mb-2">
           <h2 class="font-semibold">Messages</h2>
-          <span class="text-[11px] text-slate-500">(text only)</span>
+          <div class="ml-auto flex items-center gap-2 text-xs">
+            <label class="inline-flex items-center gap-1"><input id="showOldResolved" type="checkbox" class="rounded"> Show >24h resolved (admin)</label>
+            <label class="inline-flex items-center gap-1"><input id="showDeleted" type="checkbox" class="rounded"> Show deleted (admin)</label>
+          </div>
         </div>
         <textarea id="msgText" class="w-full border rounded-lg p-2 text-sm" rows="3" placeholder="Write a short update… (swap needed, broken device, etc.)"></textarea>
         <button id="btnPublish" class="mt-2 w-full px-3 py-2 rounded-lg border hover:bg-slate-50">Publish</button>
@@ -88,15 +88,11 @@
   </main>
 
   <footer class="max-w-6xl mx-auto px-4 py-8 text-xs text-slate-500">
-    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v1
+    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v2
   </footer>
 
-  <!-- Firebase (modular) via CDN -->
   <script type="module">
-    /**********************
-     * 0) CONFIG — EDIT!  *
-     **********************/
-    // Team roster
+    /******** 0) CONFIG ********/
     const TEAM = [
       { id: 'slava', name: 'Slava' },
       { id: 'vanina', name: 'Vanina' },
@@ -109,20 +105,17 @@
       { id: 'elise', name: 'Elise' },
       { id: 'jia', name: 'Jia' },
     ];
+    const ADMIN_ID = 'admin';
+    const ADMIN_LABEL = 'Administrator';
     const ADMIN_CODE = 'admin-code-0'; // change me
 
-    // Firebase
     const FIREBASE_CONFIG = {
-      apiKey: "AIzaSyAIG0xtx8GrdTYC7wVvpG74hB8ILvDnsgA",
-      authDomain: "lab-duty-micro.firebaseapp.com",
-      projectId: "lab-duty-micro",
-      storageBucket: "lab-duty-micro.firebasestorage.app",
-      messagingSenderId: "1033748176559",
-      appId: "1:1033748176559:web:75faef74de0023cc807e5a",
-      measurementId: "G-K6RPGETF8B"
+      apiKey: "PASTE_YOURS",
+      authDomain: "PASTE_YOURS.firebaseapp.com",
+      projectId: "PASTE_YOURS",
+      appId: "PASTE_YOURS",
     };
 
-    // Checklist items
     const CHECKITEMS = [
       { id:'benches', label:'Wipe benches' },
       { id:'trash', label:'Empty trash (non-bio)' },
@@ -133,78 +126,77 @@
       { id:'stock', label:'Refill towels/soap/ethanol' },
     ];
 
-    /**********************
-     * 1) Firebase init   *
-     **********************/
+    /******** 1) Firebase init ********/
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
     import { getAuth, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
     import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, query, where, orderBy, serverTimestamp, addDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-
     const app = initializeApp(FIREBASE_CONFIG);
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    /**********************
-     * 2) Helpers         *
-     **********************/
+    /******** 2) Helpers ********/
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => Array.from(document.querySelectorAll(sel));
-    const toKey = (d) => {
-      // Local YYYY-MM-DD (no UTC issues)
-      const y=d.getFullYear(); const m=('0'+(d.getMonth()+1)).slice(-2); const dd=('0'+d.getDate()).slice(-2);
-      return `${y}-${m}-${dd}`;
-    };
+    const toKey = (d) => { const y=d.getFullYear(); const m=('0'+(d.getMonth()+1)).slice(-2); const dd=('0'+d.getDate()).slice(-2); return `${y}-${m}-${dd}`; };
     const fromKey = (k) => { const [y,m,dd]=k.split('-').map(Number); return new Date(y,m-1,dd); };
     const addDays = (d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
     const startOfMonth = (d)=> new Date(d.getFullYear(), d.getMonth(), 1);
     const endOfMonth   = (d)=> new Date(d.getFullYear(), d.getMonth()+1, 0);
 
     function gridRangeWeekdays(cursor){
-      const start = startOfMonth(cursor);
-      const end = endOfMonth(cursor);
+      const start = startOfMonth(cursor), end = endOfMonth(cursor);
       const s = addDays(start, -((start.getDay()+6)%7));
       const e = addDays(end, (5 - ((end.getDay()+6)%7) + 7)%7);
       const days=[]; let cur=new Date(s);
       while(cur<=e){ const dow=(cur.getDay()+6)%7; if(dow<5) days.push(new Date(cur)); cur=addDays(cur,1); }
       return { days, start, end };
     }
-
-    function nameById(id){ if(!id) return null; return TEAM.find(t=>t.id===id)?.name || null; }
+    function nameById(id){ if(!id) return null; if(id===ADMIN_ID) return ADMIN_LABEL; return TEAM.find(t=>t.id===id)?.name || null; }
     function toCSV(rows){ return rows.map(r=> r.map(v=>{ const s=(v??'').toString(); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }).join(',')).join('\n'); }
 
-    /**********************
-     * 3) State           *
-     **********************/
+    /******** 3) State ********/
     let cursor = startOfMonth(new Date());
     let meId = localStorage.getItem('labduty_meId');
     let adminOK = false;
+    let showDeleted = false, showOldResolved = false;
 
-    // key => { date, assignees:[id], swapRequestedIds:[id], note?: string, checklist?: {taskId: whoId}, doneAt?: ts }
+    // key => { date, assignees:[id], swapRequestedIds:[id], note, checklist:{}, doneAt?, updatedAt? }
     const daysMap = {};
     let monthUnsub = null;
 
-    function setMe(id){ meId=id; if(id) localStorage.setItem('labduty_meId',id); else localStorage.removeItem('labduty_meId'); renderHeader(); paintAll(); renderChecklist(); }
+    function setMe(id){
+      if(id===ADMIN_ID){
+        const x = prompt('Enter admin code');
+        if(x===ADMIN_CODE){ adminOK = true; meId = null; localStorage.removeItem('labduty_meId'); }
+        else { alert('Wrong code'); adminOK=false; meId=null; }
+      }else{
+        meId = id || null; adminOK = false;
+        if(meId) localStorage.setItem('labduty_meId', meId); else localStorage.removeItem('labduty_meId');
+      }
+      renderHeader(); paintAll(); renderChecklist();
+    }
 
     function renderHeader(){
       const sel = $('#identitySelect');
-      sel.innerHTML = '<option value="">— choose —</option>' + TEAM.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
-      sel.value = meId||'';
-      $('#whoami').textContent = meId ? (nameById(meId)+ ' ✓') : '—';
+      sel.innerHTML = '<option value="">— choose —</option>'
+        + TEAM.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')
+        + `<option value="${ADMIN_ID}">${ADMIN_LABEL}</option>`;
+      sel.value = meId || (adminOK? ADMIN_ID : '');
+      $('#whoami').textContent = adminOK ? (ADMIN_LABEL+' ✓') : (meId ? (nameById(meId)+ ' ✓') : '—');
+
       $('#teamPanel').classList.toggle('hidden', !adminOK);
-      $('#btnAdmin').classList.toggle('hidden', adminOK);
       $('#btnAdminExit').classList.toggle('hidden', !adminOK);
+      // hide identity controls in admin
+      $('#identitySelect').classList.toggle('hidden', adminOK);
+      $('#labelIAm').classList.toggle('hidden', adminOK);
+
+      renderTeamChips();
+      paintAll();
     }
 
-    /**********************
-     * 4) Firestore IO    *
-     **********************/
+    /******** 4) Firestore IO ********/
     async function ensureAnon(){ if(!auth.currentUser) await signInAnonymously(auth); }
-
-    function monthKeyBounds(d){
-      const a = new Date(d.getFullYear(), d.getMonth(), 1);
-      const b = new Date(d.getFullYear(), d.getMonth()+1, 0);
-      return [toKey(a), toKey(b)];
-    }
+    function monthKeyBounds(d){ const a = new Date(d.getFullYear(), d.getMonth(), 1); const b = new Date(d.getFullYear(), d.getMonth()+1, 0); return [toKey(a), toKey(b)]; }
 
     function subscribeMonth(){
       if(monthUnsub) monthUnsub();
@@ -228,7 +220,8 @@
       const ref = doc(db,'days',dayKey);
       const snap = await getDoc(ref);
       const base = snap.exists()? migrateDay(snap.data()) : { date:dayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
-      await setDoc(ref, { ...base, assignees: ids, updatedAt: serverTimestamp() });
+      const newSwaps = (base.swapRequestedIds||[]).filter(x=> ids.includes(x)); // keep subset
+      await setDoc(ref, { ...base, assignees: ids, swapRequestedIds: newSwaps, updatedAt: serverTimestamp() });
     }
 
     async function toggleSwap(dayKey, whoId){
@@ -254,7 +247,7 @@
       await setDoc(ref,{ ...base, doneAt: serverTimestamp(), updatedAt: serverTimestamp() });
     }
 
-    // Messages
+    /******** Messages ********/
     function subscribeMessages(){
       const qy = query(collection(db,'messages'), orderBy('createdAt','desc'));
       onSnapshot(qy, (qs)=>{
@@ -262,9 +255,15 @@
         const feed = $('#feed'); feed.innerHTML='';
         qs.forEach(s=>{
           const m = s.data(); const id = s.id;
-          const resolved = m.resolvedAt?.toMillis ? m.resolvedAt.toMillis() : (m.resolvedAt? new Date(m.resolvedAt).getTime() : null);
-          if(resolved && resolved < cutoff) return; // hide resolved >24h
-          const card = document.createElement('div'); card.className='rounded-xl border p-3 bg-white';
+          const resolvedMs = m.resolvedAt?.toMillis ? m.resolvedAt.toMillis() : (m.resolvedAt? new Date(m.resolvedAt).getTime() : null);
+          const deletedMs = m.deletedAt?.toMillis ? m.deletedAt.toMillis() : (m.deletedAt? new Date(m.deletedAt).getTime() : null);
+          if(deletedMs && !adminOK) return;
+          if(resolvedMs && resolvedMs < cutoff && !(adminOK && showOldResolved)) return;
+          if(deletedMs && adminOK && !showDeleted) return;
+
+          const card = document.createElement('div');
+          const resolved = !!resolvedMs; const deleted = !!deletedMs;
+          card.className = 'rounded-xl border p-3 bg-white ' + (resolved? 'bg-green-50 border-green-300':'') + (deleted? 'opacity-60':'' );
           card.innerHTML = `
             <div class="flex items-start gap-2">
               <div class="text-sm font-medium">${m.authorName||'Anon'}</div>
@@ -272,7 +271,10 @@
             </div>
             <div class="mt-2 text-sm whitespace-pre-wrap">${(m.text||'').replace(/</g,'&lt;')}</div>
             <div class="mt-2 flex items-center gap-2">
-              <button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="resolve" data-id="${id}">${m.resolvedAt? 'Resolved ✓':'Mark resolved'}</button>
+              <button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="resolve" data-id="${id}" ${resolved? 'disabled':''}>${resolved? 'Resolved ✓':'Mark resolved'}</button>
+              ${adminOK? `<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="undo" data-id="${id}" ${resolved? '':'disabled'}>Undo resolve</button>
+              <button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="del" data-id="${id}" ${deleted? 'disabled':''}>Delete</button>
+              <button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="restore" data-id="${id}" ${deleted? '':'disabled'}>Restore</button>`:''}
               <details class="ml-auto">
                 <summary class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50 inline">Comments</summary>
                 <div class="mt-2 space-y-2" id="cm_${id}"></div>
@@ -282,32 +284,36 @@
                 </div>
               </details>
             </div>`;
-          card.querySelector('button[data-act="resolve"]').onclick = async ()=>{
-            try{ await updateDoc(doc(db,'messages', id), { resolvedAt: serverTimestamp() }); }catch(e){ console.error(e); alert('Failed'); }
-          };
+          card.querySelector('button[data-act="resolve"]').onclick = async ()=>{ try{ await updateDoc(doc(db,'messages', id), { resolvedAt: serverTimestamp() }); }catch(e){ console.error(e); alert('Failed'); } };
+          if(adminOK){
+            const bUndo = card.querySelector('button[data-act="undo"]'); if(bUndo) bUndo.onclick = async ()=>{ try{ await updateDoc(doc(db,'messages', id), { resolvedAt: null }); }catch(e){ console.error(e); alert('Failed'); } };
+            const bDel = card.querySelector('button[data-act="del"]');  if(bDel)  bDel.onclick  = async ()=>{ try{ await updateDoc(doc(db,'messages', id), { deletedAt: serverTimestamp() }); }catch(e){ console.error(e); alert('Failed'); } };
+            const bRes = card.querySelector('button[data-act="restore"]'); if(bRes) bRes.onclick = async ()=>{ try{ await updateDoc(doc(db,'messages', id), { deletedAt: null }); }catch(e){ console.error(e); alert('Failed'); } };
+          }
           card.querySelector('button[data-act="sendc"]').onclick = async ()=>{
             const input = card.querySelector('#cmi_'+id); const text = input.value.trim(); if(!text) return;
             const u = auth.currentUser;
             try{
-              await addDoc(collection(db,'messages', id, 'comments'), {
-                text, createdAt: serverTimestamp(), authorId: u?.uid||'anon', authorName: nameById(meId)||'Anon'
-              }); input.value='';
+              await addDoc(collection(db,'messages', id, 'comments'), { text, createdAt: serverTimestamp(), authorId: u?.uid||'anon', authorName: nameById(meId)||'Anon' });
+              input.value='';
             }catch(e){ console.error(e); alert('Failed'); }
           };
           feed.appendChild(card);
-          // load comments (live)
+
+          // comments live
           const cq = query(collection(db,'messages', id, 'comments'), orderBy('createdAt','asc'));
           onSnapshot(cq, (cqs)=>{
             const box = $('#cm_'+id); if(!box) return; box.innerHTML='';
-            cqs.forEach(cs=>{ const c = cs.data(); const row=document.createElement('div'); row.className='text-xs'; row.innerHTML=`<span class="font-medium">${(c.authorName||'Anon').replace(/</g,'&lt;')}:</span> ${(c.text||'').replace(/</g,'&lt;')} <span class="text-slate-400">${c.createdAt?.toDate? c.createdAt.toDate().toLocaleString():''}</span>`; box.appendChild(row); });
+            cqs.forEach(cs=>{ const c = cs.data(); const row=document.createElement('div'); row.className='text-xs';
+              row.innerHTML=`<span class="font-medium">${(c.authorName||'Anon').replace(/</g,'&lt;')}:</span> ${(c.text||'').replace(/</g,'&lt;')} <span class="text-slate-400">${c.createdAt?.toDate? c.createdAt.toDate().toLocaleString():''}</span>`;
+              box.appendChild(row);
+            });
           });
         });
       });
     }
 
-    /**********************
-     * 5) Calendar UI     *
-     **********************/
+    /******** 5) Calendar UI ********/
     function renderCalendar(){
       const cal = $('#calendar'); cal.innerHTML='';
       const { days } = gridRangeWeekdays(cursor);
@@ -335,13 +341,12 @@
           <div id="actions_${k}" class="mt-auto pt-1 flex flex-wrap gap-1"></div>
         `;
 
-        // Drag & drop targets (admin)
+        // admin DnD
         div.addEventListener('dragover', (e)=>{ if(!adminOK) return; e.preventDefault(); div.classList.add('droptarget'); });
         div.addEventListener('dragleave', ()=> div.classList.remove('droptarget'));
         div.addEventListener('drop', async (e)=>{
           if(!adminOK) return; e.preventDefault(); div.classList.remove('droptarget');
           const whoId = e.dataTransfer.getData('text/plain'); if(!whoId) return;
-          // optimistic update
           const cur = (daysMap[k]?.assignees)||[];
           if(!cur.includes(whoId)){
             daysMap[k] = daysMap[k]||{ date:k, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
@@ -363,24 +368,27 @@
       span.className = 'group inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ' + (needSwap? 'bg-amber-100 border-amber-300 text-amber-900':'bg-slate-50');
       span.textContent = name;
 
-      // Click to toggle swap (only self)
+      // toggle swap (self)
       span.addEventListener('click', async (e)=>{
         e.stopPropagation(); if(!mine) return;
-        // optimistic toggle
         const set = new Set(daysMap[dayKey]?.swapRequestedIds||[]);
         if(set.has(whoId)) set.delete(whoId); else set.add(whoId);
         daysMap[dayKey].swapRequestedIds = [...set]; paintCell(dayKey);
         try{ await toggleSwap(dayKey, whoId); }catch(err){ console.error(err); alert('Failed'); }
       });
 
-      // Remove (admin)
+      // remove (admin)
       if(adminOK){
-        const x=document.createElement('button'); x.textContent='×'; x.className='ml-1 opacity-50 hover:opacity-100';
+        const x=document.createElement('button'); x.textContent='×'; x.title='Remove from day'; x.className='ml-1 opacity-50 hover:opacity-100';
         x.addEventListener('click', async (e)=>{
-          e.stopPropagation();
+          e.stopPropagation(); if(!adminOK) return; // re-check after exit
           const cur=(daysMap[dayKey]?.assignees)||[];
-          daysMap[dayKey].assignees = cur.filter(id=>id!==whoId); paintCell(dayKey);
-          try{ await setAssignees(dayKey, daysMap[dayKey].assignees); }catch(err){ console.error(err); alert('Failed'); }
+          const next = cur.filter(id=>id!==whoId);
+          daysMap[dayKey].assignees = next;
+          const newSwaps = (daysMap[dayKey].swapRequestedIds||[]).filter(x=> x!==whoId);
+          daysMap[dayKey].swapRequestedIds = newSwaps;
+          paintCell(dayKey);
+          try{ await setAssignees(dayKey, next); }catch(err){ console.error(err); alert('Failed'); }
         });
         span.appendChild(x);
       }
@@ -390,52 +398,51 @@
 
     function paintCell(k){
       const d = daysMap[k] || { assignees:[], swapRequestedIds:[], note:'', checklist:{} };
-      const chipsEl = $('#chips_'+k);
-      const badgesEl = $('#badges_'+k);
-      const actionsEl = $('#actions_'+k);
+      const chipsEl = $('#chips_'+k), badgesEl = $('#badges_'+k), actionsEl = $('#actions_'+k);
       if(!chipsEl||!actionsEl) return;
 
-      chipsEl.innerHTML='';
-      (d.assignees||[]).forEach(id=>{ const nm = nameById(id)||id; chipsEl.appendChild(chip(nm,id,k)); });
+      chipsEl.innerHTML=''; (d.assignees||[]).forEach(id=>{ const nm = nameById(id)||id; chipsEl.appendChild(chip(nm,id,k)); });
 
       // badges
-      badgesEl.innerHTML='';
-      const swapCount = (d.swapRequestedIds||[]).length;
+      badgesEl.innerHTML=''; const swapCount = (d.swapRequestedIds||[]).length;
       if(swapCount>0){ const b = document.createElement('span'); b.className='inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-800'; b.textContent = 'swap ×'+swapCount; badgesEl.appendChild(b); }
 
-      // actions (note/swap for self)
+      // actions
       actionsEl.innerHTML='';
       const mine = meId && (d.assignees||[]).includes(meId);
       if(mine){
         const btnSwap = document.createElement('button'); btnSwap.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50';
         btnSwap.textContent = (d.swapRequestedIds||[]).includes(meId)? 'Cancel swap':'Need swap';
-        btnSwap.onclick = ()=>{
-          // trigger via chip click path to keep optimistic behavior
-          const fakeChip = chip('x', meId, k); fakeChip.click();
-        };
+        btnSwap.onclick = ()=>{ const fakeChip = chip('x', meId, k); fakeChip.click(); };
         actionsEl.append(btnSwap);
+      } else if((d.swapRequestedIds||[]).length>0 && meId){
+        const btnTake = document.createElement('button'); btnTake.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50';
+        btnTake.textContent='Take shift';
+        btnTake.onclick = async ()=>{
+          const giver = d.swapRequestedIds[0]; if(!giver) return;
+          const nextAssignees = (d.assignees||[]).map(x=> x===giver? meId : x);
+          const nextSwaps = (d.swapRequestedIds||[]).filter(x=> x!==giver);
+          daysMap[k].assignees = nextAssignees; daysMap[k].swapRequestedIds = nextSwaps; paintCell(k);
+          try{
+            await setAssignees(k, nextAssignees);
+            await updateDoc(doc(db,'days',k), { swapRequestedIds: nextSwaps, updatedAt: serverTimestamp() });
+            await addDoc(collection(db,'messages'), { text: `🔁 ${nameById(meId)||'Someone'} took ${nameById(giver)||giver}'s duty on ${k}.`, attachments:[], createdAt: serverTimestamp(), resolvedAt:null, authorId: meId||'anon', authorName: nameById(meId)||'Anon', kind:'system', meta:{type:'swap_accept', date:k, from:giver, to:meId} });
+          }catch(e){ console.error(e); alert('Failed to take shift'); }
+        };
+        actionsEl.append(btnTake);
       }
 
-      // filtering: swap-only toggle
+      // filtering
       const showSwapOnly = $('#toggleSwap').checked;
       const cell = $('#cell_'+k);
-      if(showSwapOnly){ cell.style.display = swapCount>0 ? '' : 'none'; }
-      else { cell.style.display=''; }
+      if(showSwapOnly){ cell.style.display = swapCount>0 ? '' : 'none'; } else { cell.style.display=''; }
     }
 
     function paintAll(){ const { days } = gridRangeWeekdays(cursor); days.forEach(d=> paintCell(toKey(d)) ); }
 
-    /**********************
-     * 6) Identity + Admin + Team chips
-     **********************/
+    /******** 6) Identity/Admin/Team ********/
     $('#identitySelect').addEventListener('change', (e)=>{ setMe(e.target.value || null); });
-
-    $('#btnAdmin').addEventListener('click', ()=>{
-      const x = prompt('Enter admin code');
-      if(x===ADMIN_CODE){ adminOK=true; alert('Admin unlocked'); renderHeader(); renderTeamChips(); }
-      else alert('Wrong code');
-    });
-    $('#btnAdminExit').addEventListener('click', ()=>{ adminOK=false; renderHeader(); });
+    $('#btnAdminExit').addEventListener('click', ()=>{ adminOK=false; renderHeader(); paintAll(); });
 
     function renderTeamChips(){
       const box = $('#teamChips'); box.innerHTML='';
@@ -448,16 +455,14 @@
       });
     }
 
-    /**********************
-     * 7) Month nav & query
-     **********************/
+    /******** 7) Nav & switches ********/
     $('#prevMonth').addEventListener('click', ()=>{ cursor = new Date(cursor.getFullYear(), cursor.getMonth()-1, 1); renderCalendar(); subscribeMonth(); });
     $('#nextMonth').addEventListener('click', ()=>{ cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1); renderCalendar(); subscribeMonth(); });
     $('#toggleSwap').addEventListener('change', paintAll);
+    $('#showDeleted').addEventListener('change', (e)=>{ showDeleted = e.target.checked; subscribeMessages(); });
+    $('#showOldResolved').addEventListener('change', (e)=>{ showOldResolved = e.target.checked; subscribeMessages(); });
 
-    /**********************
-     * 8) Export / Print
-     **********************/
+    /******** 8) Export / Print ********/
     $('#btnExportCSV').addEventListener('click', ()=>{
       const rows = [[ 'Date','Assignees','SwapNeeded' ]];
       Object.values(daysMap).filter(Boolean).forEach(d=>{
@@ -470,32 +475,32 @@
     });
     $('#btnPrint').addEventListener('click', ()=> window.print());
 
-    /**********************
-     * 9) Messages (text only)
-     **********************/
+    /******** 9) Messages ********/
+    async function ensureSigned(){ if(!auth.currentUser) await signInAnonymously(auth); }
     $('#btnPublish').addEventListener('click', async ()=>{
-      await ensureAnon();
+      await ensureSigned();
       const text = $('#msgText').value.trim(); if(!text) return alert('Empty');
       const author = { id: meId|| (auth.currentUser?.uid||'anon'), name: nameById(meId)||'Anon' };
       try{
-        await addDoc(collection(db,'messages'), {
-          text, attachments: [], createdAt: serverTimestamp(), resolvedAt: null,
-          authorId: author.id, authorName: author.name, kind:'user', meta:{}
-        });
+        await addDoc(collection(db,'messages'), { text, attachments: [], createdAt: serverTimestamp(), resolvedAt: null, authorId: author.id, authorName: author.name, kind:'user', meta:{} });
         $('#msgText').value='';
       }catch(e){ console.error(e); alert('Failed to publish'); }
     });
 
-    /**********************
-     * 10) Checklist (today)
-     **********************/
+    /******** 10) Checklist ********/
     function renderChecklist(){
       const k = toKey(new Date());
-      const d = daysMap[k] || { checklist:{}, assignees:[] };
+      const d = daysMap[k] || { checklist:{}, assignees:[], doneAt:null };
       const assigned = d.assignees||[];
       const isMine = meId && assigned.includes(meId);
-      $('#checklist').innerHTML='';
-      const info = $('#checklistInfo');
+      const info = $('#checklistInfo'); const area = $('#checklist'); area.innerHTML='';
+
+      if(d.doneAt){
+        $('#btnDone').classList.add('hidden');
+        info.innerHTML = `🎉 Checklist completed for ${k}. Thank you!`;
+        return;
+      }
+
       if(isMine){
         info.textContent = `You are on duty today (${assigned.map(nameById).filter(Boolean).join(' / ')})`;
         CHECKITEMS.forEach(it=>{
@@ -506,8 +511,7 @@
             cc[it.id] = cb.checked ? (meId||true) : null;
             try{ await saveChecklist(k, cc); }catch(e){ console.error(e); alert('Failed to save'); }
           });
-          row.append(cb, document.createTextNode(it.label));
-          $('#checklist').appendChild(row);
+          row.append(cb, document.createTextNode(it.label)); area.appendChild(row);
         });
         $('#btnDone').classList.remove('hidden');
       }else{
@@ -521,29 +525,20 @@
       const d = daysMap[k] || { assignees:[], checklist:{} };
       const assigned = d.assignees||[];
       const isMine = meId && assigned.includes(meId);
-      if(!isMine){
-        const ok = confirm('It is not your turn today. Are you sure you completed everything?');
-        if(!ok) return;
-      }
+      if(!isMine){ const ok = confirm('It is not your turn today. Are you sure you completed everything?'); if(!ok) return; }
       try{
         await markDone(k, meId||'anon');
-        // If all items checked and isMine — publish a system message
-        const allOk = CHECKITEMS.every(it => d.checklist && d.checklist[it.id]);
+        const allOk = CHECKITEMS.every(it => (daysMap[k]?.checklist) && daysMap[k].checklist[it.id]);
         if(allOk && isMine){
-          await addDoc(collection(db,'messages'), {
-            text: `✅ ${nameById(meId)||'Someone'} completed the supplies checklist for ${k}. Great job!`,
-            attachments: [], createdAt: serverTimestamp(), resolvedAt: null,
-            authorId: meId||'anon', authorName: nameById(meId)||'Anon', kind:'system', meta:{ type:'checklist_done', date:k }
-          });
+          await addDoc(collection(db,'messages'), { text: `✅ ${nameById(meId)||'Someone'} completed the supplies checklist for ${k}. Great job!`, attachments: [], createdAt: serverTimestamp(), resolvedAt: null, authorId: meId||'anon', authorName: nameById(meId)||'Anon', kind:'system', meta:{ type:'checklist_done', date:k } });
         }
+        daysMap[k] = { ...(daysMap[k]||{}), doneAt: new Date() };
+        renderChecklist();
       }catch(e){ console.error(e); alert('Failed to mark done'); }
     });
 
-    /**********************
-     * 11) Boot           *
-     **********************/
+    /******** 11) Boot ********/
     onAuthStateChanged(auth, async (u)=>{ if(!u) await signInAnonymously(auth); });
-    $('#identitySelect').addEventListener('change', (e)=> setMe(e.target.value || null));
     renderHeader();
     (function initCalendar(){ renderCalendar(); subscribeMonth(); })();
     subscribeMessages();
