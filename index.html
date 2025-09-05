@@ -86,7 +86,7 @@
   </main>
 
   <footer class="max-w-6xl mx-auto px-4 py-8 text-xs text-slate-500">
-    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v3
+    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v3.1
   </footer>
 
   <!-- Firebase (modular) via CDN -->
@@ -94,7 +94,6 @@
     /**********************
      * 0) CONFIG — EDIT!  *
      **********************/
-    // Team roster
     const TEAM = [
       { id: 'slava', name: 'Slava' },
       { id: 'vanina', name: 'Vanina' },
@@ -111,7 +110,6 @@
     const ADMIN_LABEL = 'Administrator';
     const ADMIN_CODE = 'admin-code-0'; // change me
 
-    // Firebase
     const FIREBASE_CONFIG = {
       apiKey: "AIzaSyAIG0xtx8GrdTYC7wVvpG74hB8ILvDnsgA",
       authDomain: "lab-duty-micro.firebaseapp.com",
@@ -122,7 +120,6 @@
       measurementId: "G-K6RPGETF8B"
     };
 
-    // Checklist items
     const CHECKITEMS = [
       { id:'benches', label:'Wipe benches' },
       { id:'trash', label:'Empty trash (non-bio)' },
@@ -169,9 +166,16 @@
     }
 
     function nameById(id){ if(!id) return null; if(id===ADMIN_ID) return ADMIN_LABEL; return TEAM.find(t=>t.id===id)?.name || null; }
-    function toCSV(rows){ return rows.map(r=> r.map(v=>{ const s=(v??'').toString(); return /[",
-]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }).join(',')).join('
-'); }
+
+    // SAFER CSV (без \n внутри литералов, чтобы копирование не ломало код)
+    function toCSV(rows){
+      return rows.map(r => r.map(v => {
+        const s = (v ?? '').toString();
+        const needsQuotes = s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r');
+        const q = needsQuotes ? '"' + s.replace(/"/g, '""') + '"' : s;
+        return q;
+      }).join(',')).join('\n');
+    }
 
     /**********************
      * 3) State           *
@@ -201,7 +205,9 @@
 
     function renderHeader(){
       const sel = $('#identitySelect');
-      sel.innerHTML = '<option value="">— choose —</option>' + TEAM.map(t=>`<option value="${t.id}">${t.name}</option>`).join('') + `<option value="${ADMIN_ID}">${ADMIN_LABEL}</option>`;
+      sel.innerHTML = '<option value="">&mdash; choose &mdash;</option>'
+        + TEAM.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')
+        + `<option value="${ADMIN_ID}">${ADMIN_LABEL}</option>`;
       sel.value = meId || (adminOK? ADMIN_ID : '');
       $('#whoami').textContent = adminOK ? (ADMIN_LABEL+' ✓') : (meId ? (nameById(meId)+ ' ✓') : '—');
 
@@ -247,7 +253,6 @@
       const ref = doc(db,'days',dayKey);
       const snap = await getDoc(ref);
       const base = snap.exists()? migrateDay(snap.data()) : { date:dayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
-      // keep swap flags only for still-assigned people
       const newSwaps = (base.swapRequestedIds||[]).filter(x=> ids.includes(x));
       await setDoc(ref, { ...base, assignees: ids, swapRequestedIds: newSwaps, updatedAt: serverTimestamp() });
     }
@@ -280,7 +285,6 @@
      **********************/
     function resubscribeMessages(){
       if(messagesUnsub) messagesUnsub();
-      // clear all old comment subs
       Object.values(commentUnsubs).forEach(u=>{ try{u();}catch(e){} });
       for(const k in commentUnsubs) delete commentUnsubs[k];
 
@@ -293,10 +297,9 @@
           const resolvedMs = m.resolvedAt?.toMillis ? m.resolvedAt.toMillis() : (m.resolvedAt? new Date(m.resolvedAt).getTime() : null);
           const deletedMs = m.deletedAt?.toMillis ? m.deletedAt.toMillis() : (m.deletedAt? new Date(m.deletedAt).getTime() : null);
 
-          // visibility
           if(!adminOK){
-            if(deletedMs) return; // hide deleted for non-admin
-            if(resolvedMs && resolvedMs < cutoff) return; // hide resolved >24h for non-admin
+            if(deletedMs) return;
+            if(resolvedMs && resolvedMs < cutoff) return;
           }
 
           const resolved = !!resolvedMs; const deleted = !!deletedMs;
@@ -325,10 +328,8 @@
             </details>
           `;
 
-          // Wire up message actions
           wireMessageButtons(card, m, id);
 
-          // Comment send
           card.querySelector('button[data-act="sendc"]').onclick = async ()=>{
             const input = card.querySelector('#cmi_'+id); const text = input.value.trim(); if(!text) return;
             const u = auth.currentUser;
@@ -339,13 +340,15 @@
 
           feed.appendChild(card);
 
-          // Live comments
           const cq = query(collection(db,'messages', id, 'comments'), orderBy('createdAt','asc'));
           const unsub = onSnapshot(cq, (cqs)=>{
             const box = $('#cm_'+id); const det = $('#det_'+id); if(!box||!det) return; box.innerHTML='';
             let count=0;
-            cqs.forEach(cs=>{ const c = cs.data(); const row=document.createElement('div'); row.className='text-xs'; row.innerHTML=`<span class=\"font-medium\">${(c.authorName||'Anon').replace(/</g,'&lt;')}:</span> ${(c.text||'').replace(/</g,'&lt;')} <span class=\"text-slate-400\">${c.createdAt?.toDate? c.createdAt.toDate().toLocaleString():''}</span>`; box.appendChild(row); count++; });
-            if(count>0) det.open = true; // auto-open if any comments
+            cqs.forEach(cs=>{ const c = cs.data(); const row=document.createElement('div'); row.className='text-xs';
+              row.innerHTML=`<span class="font-medium">${(c.authorName||'Anon').replace(/</g,'&lt;')}:</span> ${(c.text||'').replace(/</g,'&lt;')} <span class="text-slate-400">${c.createdAt?.toDate? c.createdAt.toDate().toLocaleString():''}</span>`;
+              box.appendChild(row); count++;
+            });
+            if(count>0) det.open = true;
           });
           commentUnsubs[id] = unsub;
         });
@@ -355,31 +358,28 @@
     function renderMessageButtonsHTML(m, id){
       const resolved = !!m.resolvedAt; const deleted = !!m.deletedAt;
       const parts = [];
-      // Mark resolved (everyone), disabled if already
       parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="resolve" data-id="${id}" ${resolved? 'disabled':''}>${resolved? 'Resolved ✓':'Mark resolved'}</button>`);
       if(adminOK){
-        if(resolved){ parts.push(`<button class=\"text-xs px-2 py-1 rounded-md border hover:bg-slate-50\" data-act=\"undo\" data-id=\"${id}\">Undo resolve</button>`); }
-        if(!deleted){ parts.push(`<button class=\"text-xs px-2 py-1 rounded-md border hover:bg-slate-50\" data-act=\"del\" data-id=\"${id}\">Delete</button>`); }
-        if(deleted){ parts.push(`<button class=\"text-xs px-2 py-1 rounded-md border hover:bg-slate-50\" data-act=\"restore\" data-id=\"${id}\">Restore</button>`); }
+        if(resolved){ parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="undo" data-id="${id}">Undo resolve</button>`); }
+        if(!deleted){ parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="del" data-id="${id}">Delete</button>`); }
+        if(deleted){ parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="restore" data-id="${id}">Restore</button>`); }
       }
-      // Swap offer actions (contextual)
       if(m.kind==='swap_offer' && meId){
         const isRecipient = m.meta?.to === meId;
         if(isRecipient && !m.deletedAt){
-          parts.push(`<button class=\"text-xs px-2 py-1 rounded-md border hover:bg-slate-50\" data-act=\"swap_accept\" data-id=\"${id}\">Accept offer</button>`);
-          parts.push(`<button class=\"text-xs px-2 py-1 rounded-md border hover:bg-slate-50\" data-act=\"swap_decline\" data-id=\"${id}\">Decline</button>`);
-          parts.push(`<button class=\"text-xs px-2 py-1 rounded-md border hover:bg-slate-50\" data-act=\"swap_counter\" data-id=\"${id}\">Propose different date</button>`);
+          parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="swap_accept" data-id="${id}">Accept offer</button>`);
+          parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="swap_decline" data-id="${id}">Decline</button>`);
+          parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="swap_counter" data-id="${id}">Propose different date</button>`);
         }
       }
       if(m.kind==='swap_counter' && meId){
         const isRecipient = m.meta?.to === meId;
         if(isRecipient && !m.deletedAt){
-          parts.push(`<button class=\"text-xs px-2 py-1 rounded-md border hover:bg-slate-50\" data-act=\"swap_accept_counter\" data-id=\"${id}\">Accept counter</button>`);
-          parts.push(`<button class=\"text-xs px-2 py-1 rounded-md border hover:bg-slate-50\" data-act=\"swap_decline\" data-id=\"${id}\">Decline</button>`);
+          parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="swap_accept_counter" data-id="${id}">Accept counter</button>`);
+          parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="swap_decline" data-id="${id}">Decline</button>`);
         }
       }
-      return parts.join('
-');
+      return parts.join('');
     }
 
     function wireMessageButtons(card, m, id){
@@ -395,7 +395,6 @@
       const bRes = card.querySelector('button[data-act="restore"]');
       if(bRes) bRes.onclick = async ()=>{ if(!adminOK) return; try{ await updateDoc(doc(db,'messages', id), { deletedAt: null }); }catch(e){ console.error(e); alert('Failed'); } };
 
-      // Swap offer actions
       const bAcc = card.querySelector('button[data-act="swap_accept"]');
       if(bAcc) bAcc.onclick = async ()=>{ try{ await applySwapOffer(m); await updateDoc(doc(db,'messages', id), { resolvedAt: serverTimestamp() }); }catch(e){ console.error(e); alert('Failed to accept'); } };
 
@@ -416,16 +415,13 @@
       };
     }
 
-    // Apply swap offer (both straight cover and exchange)
     async function applySwapOffer(m){
-      const type = m.kind; // 'swap_offer' or 'swap_counter' (we treat both similarly)
-      const dayKey = m.meta?.date; // day to cover (original requester date)
-      const askDay = m.meta?.askDate || null; // exchange day (optional)
-      const from = m.meta?.from; // volunteer id
-      const to = m.meta?.to;     // requester id
+      const dayKey = m.meta?.date;
+      const askDay = m.meta?.askDate || null;
+      const from = m.meta?.from;
+      const to = m.meta?.to;
       if(!dayKey || !from || !to) throw new Error('Bad offer meta');
 
-      // 1) Cover today: replace 'to' with 'from' on dayKey + clear swap flag of 'to'
       const dayRef = doc(db,'days', dayKey);
       const snap = await getDoc(dayRef); if(!snap.exists()) throw new Error('Day missing');
       const d = migrateDay(snap.data());
@@ -434,7 +430,6 @@
       await setAssignees(dayKey, nextAssignees);
       await updateDoc(dayRef, { swapRequestedIds: nextSwaps, updatedAt: serverTimestamp() });
 
-      // 2) If exchange: ensure 'from' is assigned on askDay, then replace 'from' with 'to'
       if(askDay){
         const askRef = doc(db,'days', askDay);
         const askSnap = await getDoc(askRef); if(!askSnap.exists()) throw new Error('Ask day missing');
@@ -469,12 +464,12 @@
         ].join(' ');
         div.dataset.dayKey = k;
         div.innerHTML = `
-          <div class=\"flex items-center justify-between gap-2\">
-            <div class=\"text-sm font-medium\">${d.getDate()}</div>
-            <div id=\"badges_${k}\" class=\"flex items-center gap-1\"></div>
+          <div class="flex items-center justify-between gap-2">
+            <div class="text-sm font-medium">${d.getDate()}</div>
+            <div id="badges_${k}" class="flex items-center gap-1"></div>
           </div>
-          <div id=\"chips_${k}\" class=\"flex flex-wrap gap-1\"></div>
-          <div id=\"actions_${k}\" class=\"mt-auto pt-1 flex flex-wrap gap-1\"></div>
+          <div id="chips_${k}" class="flex flex-wrap gap-1"></div>
+          <div id="actions_${k}" class="mt-auto pt-1 flex flex-wrap gap-1"></div>
         `;
 
         // Drag & drop targets (admin)
@@ -556,8 +551,7 @@
         btnSwap.onclick = ()=>{ const fakeChip = chip('x', meId, k); fakeChip.click(); };
         actionsEl.append(btnSwap);
       } else if((d.swapRequestedIds||[]).length>0 && meId){
-        // Offer two options: cover or propose exchange
-        const giver = d.swapRequestedIds[0]; // simple: first requester
+        const giver = d.swapRequestedIds[0];
         const btnCover = document.createElement('button'); btnCover.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50'; btnCover.textContent='Cover today';
         btnCover.onclick = async ()=>{
           const nextAssignees = (d.assignees||[]).map(x=> x===giver? meId : x);
@@ -582,7 +576,6 @@
         actionsEl.append(btnCover, btnEx);
       }
 
-      // filtering: swap-only toggle
       const showSwapOnly = $('#toggleSwap').checked;
       const cell = $('#cell_'+k);
       if(showSwapOnly){ cell.style.display = swapCount>0 ? '' : 'none'; }
