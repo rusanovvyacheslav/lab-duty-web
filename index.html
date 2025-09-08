@@ -479,6 +479,22 @@
 
       wireMessageButtons(card, m, id);
 
+      if (!commentUnsubs[id]) {
+        const ref = collection(db, 'messages', id, 'comments');
+        commentUnsubs[id] = onSnapshot(query(ref, orderBy('createdAt','asc')), (qs) => {
+          const box = card.querySelector('#cm_' + id);
+          if (!box) return;
+          box.innerHTML = '';
+          qs.forEach(ds => {
+            const c = ds.data();
+            const row = document.createElement('div');
+            row.className = 'text-xs px-2 py-1 rounded-md border bg-slate-50';
+            row.innerHTML = `<b>${esc(c.authorName||'Anon')}</b>: ${esc(c.text||'')}`;
+            box.appendChild(row);
+          });
+        }, (err)=> console.error('comments error', err));
+      }
+
       card.querySelector('button[data-act="sendc"]').onclick = async ()=>{
         const input = card.querySelector('#cmi_'+id); const text = input.value.trim(); if(!text) return;
         await ensureAnon();
