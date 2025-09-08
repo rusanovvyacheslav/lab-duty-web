@@ -7,30 +7,22 @@
   <!-- TailwindCSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root{
-      --theme:#0ea5e9; /* sky-500 default */
-      --bg-top:#ffffff;
-      --bg-bottom:#f1f5f9; /* slate-100 */
-    }
     .line-clamp-3{ display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
     .droptarget{ outline: 2px dashed rgba(100,116,139,0.5); outline-offset: -6px; }
-    .holiday{ background: repeating-linear-gradient(45deg, rgba(100,116,139,.10) 0 10px, transparent 10px 20px); }
+    .holiday{ background-image: repeating-linear-gradient(45deg, rgba(100,116,139,.1) 0 10px, transparent 10px 20px); }
     @media print { .no-print{ display:none !important; } }
-
-    /* theme usage */
-    .btn-accent{ background: var(--theme); color:white; }
-    .ring-theme{ box-shadow: 0 0 0 2px var(--theme) inset; }
-    body{ background: linear-gradient(to bottom, var(--bg-top), var(--bg-bottom)); }
-
-    /* rainbow card for congrats */
-    .rainbow-card{
+    /* подсветки сообщений */
+    .msg-swap{ background: #eff6ff; }            /* бледно-синий */
+    .msg-swap-admin{ background:#eff6ff; border-color:#2563eb; } /* админу — синяя рамка */
+    .msg-congrats{ 
       border:0 !important;
       background: linear-gradient(90deg,#ff9a9e,#fad0c4,#fbc2eb,#a1c4fd,#c2ffd8) !important;
       color:#111827 !important;
     }
   </style>
 </head>
-<body class="min-h-screen text-slate-800 transition-colors">
+<body class="min-h-screen bg-gradient-to-b from-white to-slate-100 text-slate-800">
+
   <!-- HEADER -->
   <header class="sticky top-0 z-10 backdrop-blur bg-white/70 border-b">
     <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
@@ -79,13 +71,13 @@
 
       <p class="text-xs text-slate-500 mt-4 flex items-center gap-2">
         <span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
-        Days needing swap are highlighted.
+        Days needing swap are highlighted. Click your own chip to toggle “need swap”.
         <span class="ml-4 inline-block w-2 h-2 rounded-full bg-slate-300"></span>
-        Grey cells are public holidays.
+        Grey cells are public holidays (France, editable in code).
       </p>
     </section>
 
-    <!-- RIGHT: admin/team & supplies checklist & messages & profile -->
+    <!-- RIGHT: admin/team & supplies checklist & messages -->
     <aside class="col-span-12 lg:col-span-4 space-y-6">
       <div id="teamPanel" class="rounded-2xl border bg-white p-4 hidden">
         <div class="flex items-center gap-2 mb-2">
@@ -112,38 +104,11 @@
         <hr class="my-3"/>
         <div id="feed" class="space-y-3"></div>
       </div>
-
-      <!-- Profile (личный кабинет) — ПОСЛЕДНИЙ БЛОК -->
-      <div class="rounded-2xl border bg-white p-4">
-        <div class="flex items-center gap-2 mb-2">
-          <h2 class="font-semibold">My profile</h2>
-        </div>
-        <div class="space-y-2 text-sm">
-          <div class="flex items-center gap-2">
-            <label class="w-32 text-slate-500">Name</label>
-            <input id="pf_name" class="flex-1 border rounded-lg px-2 py-1" placeholder="Your display name"/>
-          </div>
-          <div class="flex items-center gap-2">
-            <label class="w-32 text-slate-500">Birthday</label>
-            <input id="pf_bday" type="date" class="border rounded-lg px-2 py-1"/>
-          </div>
-          <div class="flex items-center gap-2">
-            <label class="w-32 text-slate-500">Page color</label>
-            <input id="pf_color" type="color" class="border rounded-lg w-12 h-8 p-0"/>
-          </div>
-          <div>
-            <label class="text-slate-500">Emoji</label>
-            <div id="pf_emojiBox" class="mt-1 flex flex-wrap gap-1"></div>
-          </div>
-          <button id="pf_save" class="btn-accent mt-2 px-3 py-2 rounded-lg">Save profile</button>
-          <p id="pf_status" class="text-xs text-slate-500"></p>
-        </div>
-      </div>
     </aside>
   </main>
 
   <footer class="max-w-6xl mx-auto px-4 py-8 text-xs text-slate-500">
-    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v4.1
+    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v4.2
   </footer>
 
   <!-- Modal overlay: date picker -->
@@ -165,7 +130,7 @@
         </div>
         <div class="p-4 border-t flex items-center gap-2">
           <button id="dm_cancel" class="px-3 py-2 rounded-lg border hover:bg-slate-50">Cancel</button>
-          <button id="dm_ok" class="ml-auto px-3 py-2 rounded-lg btn-accent disabled:opacity-50" disabled>Select</button>
+          <button id="dm_ok" class="ml-auto px-3 py-2 rounded-lg border hover:bg-slate-50 disabled:opacity-50" disabled>Select</button>
         </div>
       </div>
     </div>
@@ -177,24 +142,23 @@
      * 0) CONFIG — EDIT!  *
      **********************/
     const TEAM = [
-      { id: 'slava',   name: 'Slava' },
-      { id: 'vanina',  name: 'Vanina' },
-      { id: 'helene',  name: 'Helene' },
-      { id: 'eva',     name: 'Eva' },
+      { id: 'slava', name: 'Slava' },
+      { id: 'vanina', name: 'Vanina' },
+      { id: 'helene', name: 'Helene' },
+      { id: 'eva', name: 'Eva' },
       { id: 'guillaume', name: 'Guillaume' },
-      { id: 'gaetan',  name: 'Gaetan' },
+      { id: 'gaetan', name: 'Gaetan' },
       { id: 'mathieu', name: 'Mathieu' },
-      { id: 'luc',     name: 'Luc' },
-      { id: 'elise',   name: 'Elise' },
-      { id: 'jia',     name: 'Jia' },
+      { id: 'luc', name: 'Luc' },
+      { id: 'elise', name: 'Elise' },
+      { id: 'jia', name: 'Jia' },
     ];
     const ADMIN_ID = 'admin';
     const ADMIN_LABEL = 'Administrator';
     const ADMIN_CODE = 'admin-code-0'; // change me
 
-    // Праздники (Франция; при необходимости дополняйте)
+    // Праздники (Франция, пример 2025–2026)
     const HOLIDAYS = {
-      // 2025
       '2025-01-01':'New Year',
       '2025-04-21':'Easter Monday',
       '2025-05-01':'Labour Day',
@@ -206,7 +170,6 @@
       '2025-11-01':'All Saints’ Day',
       '2025-11-11':'Armistice Day',
       '2025-12-25':'Christmas',
-      // 2026
       '2026-01-01':'New Year',
       '2026-04-06':'Easter Monday',
       '2026-05-01':'Labour Day',
@@ -240,19 +203,12 @@
       { id:'stock', label:'Refill towels/soap/ethanol' },
     ];
 
-    const EMOJIS = ['😀','🙂','😎','🧪','🧫','🧬','⚗️','🔬','🧹','🧼','✅','🍩','☕','🚀','💡','🌈','🎉','👌','🧠'];
-
     /**********************
      * 1) Firebase init   *
      **********************/
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-    import {
-      getAuth, onAuthStateChanged, signInAnonymously
-    } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    import {
-      getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot,
-      query, where, orderBy, serverTimestamp, addDoc
-    } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import { getAuth, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, query, where, orderBy, serverTimestamp, addDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
     const app = initializeApp(FIREBASE_CONFIG);
     const auth = getAuth(app);
@@ -261,9 +217,10 @@
     /**********************
      * 2) Helpers         *
      **********************/
-    const $ = (sel) => document.querySelector(sel);
+    const $  = (sel) => document.querySelector(sel);
     const $$ = (sel) => Array.from(document.querySelectorAll(sel));
     const esc = (s)=> (s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
     const toKey = (d) => {
       const y=d.getFullYear(); const m=('0'+(d.getMonth()+1)).slice(-2); const dd=('0'+d.getDate()).slice(-2);
       return `${y}-${m}-${dd}`;
@@ -290,13 +247,15 @@
     }
 
     function nameById(id){ if(!id) return null; if(id===ADMIN_ID) return ADMIN_LABEL; return TEAM.find(t=>t.id===id)?.name || null; }
+    function isHolidayKey(k){ return !!HOLIDAYS[k]; }
 
-    function setThemeColor(hex){
-      const color = hex || '#0ea5e9';
-      document.documentElement.style.setProperty('--theme', color);
-      // слегка меняем фон
-      document.documentElement.style.setProperty('--bg-top', '#ffffff');
-      document.documentElement.style.setProperty('--bg-bottom', '#f8fafc'); // slate-50
+    function toCSV(rows){
+      return rows.map(r => r.map(v => {
+        const s = (v ?? '').toString();
+        const needsQuotes = s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r');
+        const q = needsQuotes ? '"' + s.replace(/"/g, '""') + '"' : s;
+        return q;
+      }).join(',')).join('\n');
     }
 
     /**********************
@@ -307,69 +266,45 @@
     let meId = localStorage.getItem('labduty_meId');
     let adminOK = false;
 
-    // key => { date, assignees:[id], ... }
+    // days
     const daysMap = {};
     let rangeUnsub = null;
+    // messages
     let messagesUnsub = null;
     const commentUnsubs = {};
 
     async function ensureAnon(){ if(!auth.currentUser) await signInAnonymously(auth); }
 
     /**********************
-     * 4) Profiles        *
-     * - profiles/{uid} -> { teamId, isAdmin }
-     * - profilesByTeam/{teamId} -> { name, birthday, themeColor, emoji }
+     * 4) Profiles (минимум, только для приватности и админа)
+     * profiles/{uid} -> { teamId, isAdmin }
      **********************/
-    async function saveUidProfileTeam(){
+    async function saveMyProfileTeam(isAdminOverride=null){
       await ensureAnon();
       const u = auth.currentUser;
-      if(!u || !meId) return;
-      await setDoc(doc(db,'profiles', u.uid), {
-        teamId: meId,
-        isAdmin: !!adminOK
-      }, { merge:true });
-    }
-
-    async function loadTeamProfileToUI(){
-      if(!meId) return;
-      // читаем настройки конкретного teamId
-      const snap = await getDoc(doc(db,'profilesByTeam', meId));
-      const fallbackName = nameById(meId)||'';
-      if(snap.exists()){
-        const p = snap.data();
-        $('#pf_name').value  = p.name || fallbackName;
-        $('#pf_bday').value  = p.birthday || '';
-        $('#pf_color').value = p.themeColor || '#0ea5e9';
-        setThemeColor(p.themeColor||'#0ea5e9');
-        // emoji select
-        $$('#pf_emojiBox button').forEach(b=>{
-          b.classList.toggle('ring-2', b.textContent === (p.emoji||''));
-          b.classList.toggle('ring-theme', b.textContent === (p.emoji||''));
-        });
-      } else {
-        $('#pf_name').value  = fallbackName;
-        $('#pf_bday').value  = '';
-        $('#pf_color').value = '#0ea5e9';
-        setThemeColor('#0ea5e9');
-        $$('#pf_emojiBox button').forEach(b=>{ b.classList.remove('ring-2','ring-theme'); });
+      if(!u) return;
+      const data = { };
+      if(meId) data.teamId = meId;
+      if(isAdminOverride !== null) data.isAdmin = !!isAdminOverride;
+      if(Object.keys(data).length>0){
+        await setDoc(doc(db,'profiles', u.uid), data, { merge:true });
       }
     }
 
+    /**********************
+     * 5) Identity + Admin + Team chips
+     **********************/
     function setMe(id){
       if(id===ADMIN_ID){
         const x = prompt('Enter admin code');
-        if(x===ADMIN_CODE){ adminOK=true; meId=null; localStorage.removeItem('labduty_meId'); }
-        else { alert('Wrong code'); adminOK=false; meId=null; }
+        if(x===ADMIN_CODE){ adminOK=true; meId=null; localStorage.removeItem('labduty_meId'); saveMyProfileTeam(true); }
+        else { alert('Wrong code'); adminOK=false; meId=null; saveMyProfileTeam(false); }
       }else{
         meId=id||null; adminOK=false;
         if(meId) localStorage.setItem('labduty_meId',meId); else localStorage.removeItem('labduty_meId');
+        saveMyProfileTeam(false);
       }
-      renderHeader();
-      (async ()=>{
-        await saveUidProfileTeam();   // uid -> teamId
-        await loadTeamProfileToUI();  // teamId settings -> UI
-      })();
-      paintAll(); renderChecklist();
+      renderHeader(); paintAll(); renderChecklist();
       resubscribeMessages();
     }
 
@@ -390,8 +325,22 @@
       paintAll();
     }
 
+    $('#identitySelect').addEventListener('change', (e)=> setMe(e.target.value || null));
+    $('#btnAdminExit').addEventListener('click', ()=>{ adminOK=false; saveMyProfileTeam(false); renderHeader(); paintAll(); resubscribeMessages(); });
+
+    function renderTeamChips(){
+      const box = $('#teamChips'); box.innerHTML='';
+      TEAM.forEach(t=>{
+        const el = document.createElement('div');
+        el.className='inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-white text-sm';
+        el.textContent=t.name; el.draggable = adminOK;
+        el.addEventListener('dragstart', (e)=>{ e.dataTransfer.setData('text/plain', t.id); });
+        box.appendChild(el);
+      });
+    }
+
     /**********************
-     * 5) Firestore IO    *
+     * 6) Firestore IO: days
      **********************/
     function rangeKeyBounds(d, span){
       const [a,b] = monthBounds(d, span);
@@ -404,8 +353,7 @@
       const qy = query(collection(db,'days'), where('date','>=',a), where('date','<=',b), orderBy('date','asc'));
       rangeUnsub = onSnapshot(qy, (qs)=>{
         qs.forEach(docSnap=>{ const d = migrateDay(docSnap.data()); daysMap[docSnap.id] = d; });
-        renderCalendar(); // перерисуем весь блок, чтобы не упустить новые месяцы
-        renderChecklist();
+        renderCalendar(); renderChecklist();
       });
     }
 
@@ -449,7 +397,7 @@
     }
 
     /**********************
-     * 6) Messages        *
+     * 7) Messages
      **********************/
     function resubscribeMessages(){
       if(messagesUnsub) messagesUnsub();
@@ -463,8 +411,9 @@
         qs.forEach(s=>{
           const m = s.data(); const id = s.id;
 
-          // Клиентский фильтр приватности обменов (правила уже фильтруют тоже)
-          if(!adminOK && (m.kind==='swap_offer' || m.kind==='swap_counter')){
+          // приватность обменов: на клиенте тоже фильтруем (правила тоже ограничивают)
+          const isSwapKind = (m.kind==='swap_offer' || m.kind==='swap_counter');
+          if(isSwapKind && !adminOK){
             const v = m.visibleTeamIds||[];
             if(!(meId && v.includes(meId))) return;
           }
@@ -477,19 +426,16 @@
             if(resolvedMs && resolvedMs < cutoff) return;
           }
 
-          const isSwap = (m.kind==='swap_offer' || m.kind==='swap_counter' || (m.kind==='system' && (m.meta?.type==='swap_accept' || m.meta?.type==='swap_done')));
+          const isSwap = isSwapKind || (m.kind==='system' && (m.meta?.type==='swap_accept' || m.meta?.type==='swap_done'));
           const isCongrats = (m.kind==='system' && m.meta?.type==='checklist_done');
 
           const card = document.createElement('div');
-          let baseClass = 'rounded-xl border p-3 bg-white';
-          if(isSwap){
-            baseClass += adminOK ? ' border-blue-600 bg-blue-50' : ' bg-blue-50';
-          }
-          if(isCongrats){ card.className='rounded-xl p-3 rainbow-card'; } else { card.className = baseClass; }
+          card.className = 'rounded-xl border p-3 bg-white';
+          if(isSwap) card.className += adminOK ? ' msg-swap msg-swap-admin border' : ' msg-swap';
+          if(isCongrats) card.className = 'rounded-xl p-3 msg-congrats';
           if(m.deletedAt) card.classList.add('opacity-60');
 
-          const who   = esc(m.authorName||'Anon');
-          const emoji = esc(m.authorEmoji||'');
+          const who = esc(m.authorName||'Anon');
           const headerRight = [];
           if(m.resolvedAt){ headerRight.push(`<span class='inline-flex items-center gap-1 px-1.5 py-0.5 rounded border'>Resolved: ${m.resolvedAt?.toDate? m.resolvedAt.toDate().toLocaleString():''}</span>`); }
           if(m.deletedAt){ headerRight.push(`<span class='inline-flex items-center gap-1 px-1.5 py-0.5 rounded border'>Deleted: ${m.deletedAt?.toDate? m.deletedAt.toDate().toLocaleString():''}</span>`); }
@@ -497,7 +443,7 @@
 
           card.innerHTML = `
             <div class="flex items-start gap-2">
-              <div class="text-sm font-medium">${emoji? (emoji+'&nbsp;') : ''}${who}</div>
+              <div class="text-sm font-medium">${who}</div>
               <div class="ml-auto text-xs text-slate-600 flex items-center gap-2">${headerRight.join(' ')}</div>
             </div>
             <div class="mt-2 text-sm whitespace-pre-wrap">${esc(m.text||'')}</div>
@@ -520,23 +466,14 @@
             const input = card.querySelector('#cmi_'+id); const text = input.value.trim(); if(!text) return;
             await ensureAnon();
             const u = auth.currentUser;
-            // эмодзи из profilesByTeam/{meId}
-            let authorEmoji = '';
-            try {
-              const ps = await getDoc(doc(db,'profilesByTeam', meId));
-              if(ps.exists()) authorEmoji = ps.data().emoji || '';
-            }catch(_){}
             try{
               await addDoc(collection(db,'messages', id, 'comments'), {
-                text, createdAt: serverTimestamp(),
-                authorId: u?.uid||'anon',
-                authorName: nameById(meId)||'Anon',
-                authorEmoji
+                text, createdAt: serverTimestamp(), authorId: u?.uid||'anon', authorName: nameById(meId)||'Anon'
               }); input.value='';
             }catch(e){ console.error(e); alert('Failed'); }
           };
 
-          feed.appendChild(card);
+          $('#feed').appendChild(card);
 
           const cq = query(collection(db,'messages', id, 'comments'), orderBy('createdAt','asc'));
           const unsub = onSnapshot(cq, (cqs)=>{
@@ -545,8 +482,7 @@
             cqs.forEach(cs=>{
               const c = cs.data();
               const row=document.createElement('div'); row.className='text-xs';
-              const em = esc(c.authorEmoji||'');
-              row.innerHTML=`${em? (em+'&nbsp;'):''}<span class="font-medium">${esc(c.authorName||'Anon')}:</span> ${esc(c.text||'')} <span class="text-slate-400">${c.createdAt?.toDate? c.createdAt.toDate().toLocaleString():''}</span>`;
+              row.innerHTML=`<span class="font-medium">${esc(c.authorName||'Anon')}:</span> ${esc(c.text||'')} <span class="text-slate-400">${c.createdAt?.toDate? c.createdAt.toDate().toLocaleString():''}</span>`;
               box.appendChild(row); count++;
             });
             if(count>0) det.open = true;
@@ -614,15 +550,12 @@
           onSelect: async (alt)=>{
             try{
               await ensureAnon();
-              const pSnap = await getDoc(doc(db,'profilesByTeam', myId));
-              const authorEmoji = pSnap.exists() ? (pSnap.data().emoji||'') : '';
               const u = auth.currentUser;
               await addDoc(collection(db,'messages'), {
                 text:`🔁 Counter-offer: ${alt}`,
                 createdAt: serverTimestamp(),
                 authorId: u?.uid||'anon',
                 authorName: nameById(myId)||'Anon',
-                authorEmoji,
                 kind:'swap_counter',
                 meta:{ from: myId, to: otherId, date: m.meta.date, askDate: alt },
                 visibleTeamIds:[myId, otherId]
@@ -639,13 +572,9 @@
     async function addSystemMsg(text, meta={}, authorTeamId=null){
       await ensureAnon();
       const u = auth.currentUser;
-      const pSnap = await getDoc(doc(db,'profilesByTeam', authorTeamId||meId||''));
-      const authorEmoji = pSnap.exists() ? (pSnap.data().emoji||'') : '';
       await addDoc(collection(db,'messages'), {
         text, attachments: [], createdAt: serverTimestamp(), resolvedAt: null,
-        authorId: u?.uid||'anon',
-        authorName: nameById(authorTeamId||meId)||'System',
-        authorEmoji,
+        authorId: u?.uid||'anon', authorName: nameById(authorTeamId||meId)||'System',
         kind:'system', meta
       });
     }
@@ -684,7 +613,7 @@
     }
 
     /**********************
-     * 7) Calendar UI     *
+     * 8) Calendar UI
      **********************/
     function renderMonthBlock(baseDate){
       const month = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
@@ -708,7 +637,7 @@
         const k = toKey(d);
         const inMonth = d.getMonth()===month.getMonth();
         const isToday = k===todayK;
-        const isHoliday = !!HOLIDAYS[k];
+        const isHoliday = isHolidayKey(k);
 
         const div = document.createElement('div');
         div.id = 'cell_'+k;
@@ -771,7 +700,7 @@
       span.className = 'group inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ' + (needSwap? 'bg-amber-100 border-amber-300 text-amber-900':'bg-slate-50');
       span.textContent = name;
 
-      // Toggle swap (only self)
+      // toggle swap (only self)
       span.addEventListener('click', async (e)=>{
         e.stopPropagation(); if(!mine) return;
         const set = new Set(daysMap[dayKey]?.swapRequestedIds||[]);
@@ -780,7 +709,7 @@
         try{ await toggleSwap(dayKey, whoId); }catch(err){ console.error(err); alert('Failed'); }
       });
 
-      // Remove (admin)
+      // remove (admin)
       if(adminOK){
         const x=document.createElement('button'); x.textContent='×'; x.title='Remove from day'; x.className='ml-1 opacity-50 hover:opacity-100';
         x.addEventListener('click', async (e)=>{
@@ -791,7 +720,7 @@
           const newSwaps = (daysMap[dayKey].swapRequestedIds||[]).filter(x=> x!==whoId);
           daysMap[dayKey].swapRequestedIds = newSwaps;
           paintCell(dayKey);
-          try{ await setAssignees(dayKey, next); }catch(err){ console.error(err); alert('Failed'); }
+          try{ await setAssignees(dayKey, next); }catch(e){ console.error(e); alert('Failed'); }
         });
         span.appendChild(x);
       }
@@ -840,7 +769,6 @@
         actionsEl.append(btnSwap);
       } else if((d.swapRequestedIds||[]).length>0 && meId){
         const giver = d.swapRequestedIds[0];
-        // Cover today
         const btnCover = document.createElement('button'); btnCover.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50'; btnCover.textContent='Cover today';
         btnCover.onclick = async ()=>{
           const nextAssignees = (d.assignees||[]).map(x=> x===giver? meId : x);
@@ -855,7 +783,7 @@
         };
         actionsEl.append(btnCover);
 
-        // Propose exchange… показать только если у меня есть любые назначения
+        // Показать «Propose exchange…» только если у меня есть назначения
         if(iHaveAny){
           const btnEx = document.createElement('button'); btnEx.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50'; btnEx.textContent='Propose exchange…';
           btnEx.onclick = async ()=>{
@@ -869,14 +797,12 @@
                 if(!dd || !(dd.assignees||[]).includes(meId)){ alert('You are not assigned on that date.'); return; }
                 try{
                   await ensureAnon();
-                  const pSnap = await getDoc(doc(db,'profilesByTeam', meId));
-                  const authorEmoji = pSnap.exists() ? (pSnap.data().emoji||'') : '';
                   const u = auth.currentUser;
                   await addDoc(collection(db,'messages'), {
                     text:`🔁 Swap offer: ${nameById(meId)||'Someone'} proposes exchange ${k} ⇄ ${alt}`,
-                    createdAt: serverTimestamp(), authorId: u?.uid||'anon',
+                    createdAt: serverTimestamp(),
+                    authorId: u?.uid||'anon',
                     authorName: nameById(meId)||'Anon',
-                    authorEmoji,
                     kind:'swap_offer',
                     meta:{ from: meId, to: giver, date: k, askDate: alt },
                     visibleTeamIds:[meId, giver]
@@ -907,59 +833,6 @@
     }
 
     /**********************
-     * 8) Identity + Team chips + Profile UI
-     **********************/
-    $('#identitySelect').addEventListener('change', (e)=>{ setMe(e.target.value || null); });
-    $('#btnAdminExit').addEventListener('click', ()=>{ adminOK=false; renderHeader(); paintAll(); resubscribeMessages(); });
-
-    function renderTeamChips(){
-      const box = $('#teamChips'); box.innerHTML='';
-      TEAM.forEach(t=>{
-        const el = document.createElement('div');
-        el.className='inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-white text-sm';
-        el.textContent=t.name; el.draggable = adminOK;
-        el.addEventListener('dragstart', (e)=>{ e.dataTransfer.setData('text/plain', t.id); });
-        box.appendChild(el);
-      });
-    }
-
-    function renderEmojiPicker(){
-      const box = $('#pf_emojiBox'); box.innerHTML='';
-      EMOJIS.forEach(e=>{
-        const b = document.createElement('button');
-        b.type='button';
-        b.className='px-2 py-1 rounded-lg border hover:bg-slate-50';
-        b.textContent = e;
-        b.onclick = ()=>{
-          $$('#pf_emojiBox button').forEach(x=> { x.classList.remove('ring-2','ring-theme'); });
-          b.classList.add('ring-2','ring-theme');
-        };
-        box.appendChild(b);
-      });
-    }
-
-    $('#pf_save').addEventListener('click', async ()=>{
-      if(!meId) return alert('Choose who you are in the header.');
-      await ensureAnon();
-      const name = $('#pf_name').value.trim() || (nameById(meId)||'Anon');
-      const birthday = $('#pf_bday').value || '';
-      const themeColor = $('#pf_color').value || '#0ea5e9';
-      let emoji = '';
-      $$('#pf_emojiBox button').forEach(b=>{ if(b.classList.contains('ring-2')) emoji = b.textContent; });
-      try{
-        // сохраняем настройки по teamId
-        await setDoc(doc(db,'profilesByTeam', meId), {
-          name, birthday, themeColor, emoji
-        }, { merge:true });
-        // обновим uid->teamId (для правил) и применим тему
-        await saveUidProfileTeam();
-        setThemeColor(themeColor);
-        $('#pf_status').textContent = 'Saved ✓';
-        setTimeout(()=> $('#pf_status').textContent='', 2000);
-      }catch(e){ console.error(e); alert('Failed to save profile'); }
-    });
-
-    /**********************
      * 9) Month nav & tools
      **********************/
     $('#prevMonth').addEventListener('click', ()=>{ cursor = new Date(cursor.getFullYear(), cursor.getMonth()-1, 1); renderCalendar(); subscribeRange(); });
@@ -973,14 +846,13 @@
       const ymStart = `${cursor.getFullYear()}-${('0'+(cursor.getMonth()+1)).slice(-2)}`;
       const end = new Date(cursor.getFullYear(), cursor.getMonth()+spanMonths, 0);
       const ymEnd = `${end.getFullYear()}-${('0'+(end.getMonth()+1)).slice(-2)}`;
-
       Object.values(daysMap).filter(Boolean).forEach(d=>{
         if(!d.date) return;
         if(d.date >= ymStart && d.date <= ymEnd){
           rows.push([ d.date, (d.assignees||[]).map(nameById).filter(Boolean).join(' / '), (d.swapRequestedIds||[]).map(nameById).filter(Boolean).join(' / ') ]);
         }
       });
-      const csv = rows.map(r=>r.join(',')).join('\n');
+      const csv = toCSV(rows);
       const blob = new Blob([csv],{type:'text/csv'});
       const url = URL.createObjectURL(blob);
       const a=document.createElement('a'); a.href=url; a.download='rota-'+ymStart+'__'+ymEnd+'.csv'; a.click(); URL.revokeObjectURL(url);
@@ -991,15 +863,10 @@
       await ensureAnon();
       const text = $('#msgText').value.trim(); if(!text) return alert('Empty');
       const u = auth.currentUser;
-      let authorEmoji = '';
-      try{
-        const ps = await getDoc(doc(db,'profilesByTeam', meId||''));
-        if(ps.exists()) authorEmoji = ps.data().emoji || '';
-      }catch(_){}
       try{
         await addDoc(collection(db,'messages'), {
           text, attachments: [], createdAt: serverTimestamp(), resolvedAt: null,
-          authorId: u?.uid||'anon', authorName: nameById(meId)||'Anon', authorEmoji,
+          authorId: u?.uid||'anon', authorName: nameById(meId)||'Anon',
           kind:'user', meta:{}
         });
         $('#msgText').value='';
@@ -1060,7 +927,7 @@
     });
 
     /**********************
-     * 11) Modal (date picker) — из daysMap
+     * 11) Modal (date picker) — по данным daysMap
      **********************/
     const dateModal = $('#dateModal');
     const dmTitle = $('#dm_title');
@@ -1094,6 +961,7 @@
 
     function datesFor(teamId){
       const out=[];
+      if(!teamId) return out;
       const [a,b] = rangeKeyBounds(cursor, spanMonths);
       let cur = fromKey(a), end = fromKey(b);
       while(cur<=end){
@@ -1146,14 +1014,14 @@
      * 12) Boot           *
      **********************/
     onAuthStateChanged(auth, async (u)=>{ if(!u) await signInAnonymously(auth); });
-    renderEmojiPicker();
     renderHeader();
     renderCalendar();
     subscribeRange();
     resubscribeMessages();
     setInterval(renderChecklist, 5000); renderChecklist();
 
-    if(meId){ await saveUidProfileTeam(); await loadTeamProfileToUI(); }
+    // если «я» уже выбран — зафиксируем привязку uid->teamId (нужно для приватности)
+    (async () => { if(meId) await saveMyProfileTeam(false); })();
   </script>
 </body>
 </html>
