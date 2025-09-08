@@ -267,22 +267,20 @@
 
     /******** 5) Identity/Admin UI ********/
     async function setMe(id){
-      if(id===ADMIN_ID){
+      if (id===ADMIN_ID) {
         const x = prompt('Enter admin code');
-        if(x===ADMIN_CODE){
+        if (x===ADMIN_CODE) {
           adminOK = true;
           meId = null; localStorage.removeItem('labduty_meId');
-          await saveMyProfileTeam(true);
-        }else{
+          // await saveMyProfileTeam(true);  // УДАЛИТЬ: не трогаем isAdmin в профиле
+          await saveMyProfileTeam(false);     // только teamId (очистить), без прав
+        } else {
           alert('Wrong code');
           adminOK = false;
           await saveMyProfileTeam(false);
         }
-      }else{
-        meId = id || null; adminOK = false;
-        if(meId) localStorage.setItem('labduty_meId',meId); else localStorage.removeItem('labduty_meId');
-        await saveMyProfileTeam(false);
       }
+
       renderHeader();
       await resubscribeMessages();
       renderChecklist();
@@ -1038,7 +1036,7 @@
     onAuthStateChanged(auth, async (u)=>{
       if(!u){ await signInAnonymously(auth); return; }
 
-      await clearAdminFlag();
+      // await clearAdminFlag();
       await saveMyProfileTeam(false);
 
       const unsubProfile = subscribeProfile();
