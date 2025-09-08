@@ -9,9 +9,19 @@
     .droptarget{ outline: 2px dashed rgba(100,116,139,0.5); outline-offset: -6px; }
     .holiday{ background-image: repeating-linear-gradient(45deg, rgba(100,116,139,.12) 0 10px, transparent 10px 20px); }
     @media print { .no-print{ display:none !important; } }
+
+    /* Подсветки сообщений */
     .msg-swap{ background:#eff6ff; }
     .msg-swap-admin{ background:#eff6ff; border-color:#2563eb; }
-    .msg-congrats{ border:0 !important; background:linear-gradient(90deg,#ff9a9e,#fad0c4,#fbc2eb,#a1c4fd,#c2ffd8)!important; color:#111827!important; }
+    .msg-congrats{
+      border:0 !important;
+      background: linear-gradient(90deg,#ff9a9e,#fad0c4,#fbc2eb,#a1c4fd,#c2ffd8) !important;
+      color:#111827 !important;
+    }
+    .msg-resolved{ background:#ecfdf5 !important; border-color:#10b981 !important; }
+
+    /* Кнопки disabled */
+    .btn-disabled{ opacity:.5; pointer-events:none; }
   </style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-white to-slate-100 text-slate-800">
@@ -22,6 +32,7 @@
       <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
       <h1 class="text-xl font-semibold">lab-duty</h1>
 
+      <!-- Identity / Admin -->
       <div class="ml-auto flex items-center gap-2 no-print">
         <label id="labelIAm" class="text-xs text-slate-500">I am:</label>
         <select id="identitySelect" class="px-2 py-1.5 rounded-lg border bg-white text-sm min-w-[180px]"></select>
@@ -33,6 +44,7 @@
 
   <!-- MAIN -->
   <main class="max-w-6xl mx-auto px-4 py-6 grid grid-cols-12 gap-6">
+    <!-- LEFT: calendar + toolbar -->
     <section class="col-span-12 lg:col-span-8">
       <div class="flex items-center gap-2 mb-3 no-print">
         <button id="prevMonth" class="px-3 py-1.5 rounded-lg border hover:bg-slate-50">← Prev</button>
@@ -68,6 +80,7 @@
       </p>
     </section>
 
+    <!-- RIGHT: team (admin) + checklist + messages -->
     <aside class="col-span-12 lg:col-span-4 space-y-6">
       <div id="teamPanel" class="rounded-2xl border bg-white p-4 hidden">
         <div class="flex items-center gap-2 mb-2">
@@ -90,7 +103,7 @@
           <h2 class="font-semibold">Messages</h2>
         </div>
         <textarea id="msgText" class="w-full border rounded-lg p-2 text-sm" rows="3" placeholder="Write a short update… (swap needed, broken device, etc.)"></textarea>
-        <button id="btnPublish" class="mt-2 w-full px-3 py-2 rounded-lg border hover:bg-slate-50">Publish</button>
+        <button id="btnPublish" disabled class="mt-2 w-full px-3 py-2 rounded-lg border hover:bg-slate-50">Publish</button>
         <hr class="my-3"/>
         <div id="feed" class="space-y-3"></div>
       </div>
@@ -101,7 +114,7 @@
     Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v5.3
   </footer>
 
-  <!-- MODAL -->
+  <!-- MODAL: choose a date -->
   <div id="dateModal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
@@ -130,40 +143,73 @@
   <script type="module">
     /******** 0) CONFIG ********/
     const TEAM = [
-      { id:'slava',name:'Slava' },{ id:'vanina',name:'Vanina' },{ id:'helene',name:'Helene' },{ id:'eva',name:'Eva' },
-      { id:'guillaume',name:'Guillaume' },{ id:'gaetan',name:'Gaetan' },{ id:'mathieu',name:'Mathieu' },
-      { id:'luc',name:'Luc' },{ id:'elise',name:'Elise' },{ id:'jia',name:'Jia' },
+      { id: 'slava', name: 'Slava' },
+      { id: 'vanina', name: 'Vanina' },
+      { id: 'helene', name: 'Helene' },
+      { id: 'eva', name: 'Eva' },
+      { id: 'guillaume', name: 'Guillaume' },
+      { id: 'gaetan', name: 'Gaetan' },
+      { id: 'mathieu', name: 'Mathieu' },
+      { id: 'luc', name: 'Luc' },
+      { id: 'elise', name: 'Elise' },
+      { id: 'jia', name: 'Jia' },
     ];
-    const ADMIN_ID='admin', ADMIN_LABEL='Administrator';
-    const ADMIN_CODE='admin-code-CHANGE-ME'; // ← ЗАМЕНИ
+    const ADMIN_ID = 'admin';
+    const ADMIN_LABEL = 'Administrator';
+    const ADMIN_CODE = 'admin-code-CHANGE-ME'; // ← ЗАМЕНИТЕ
 
+    // Праздники (пример FR 2025–2026)
     const HOLIDAYS = {
-      '2025-01-01':'New Year','2025-04-21':'Easter Monday','2025-05-01':'Labour Day','2025-05-08':'Victory in Europe Day','2025-05-29':'Ascension Day','2025-06-09':'Whit Monday','2025-07-14':'Bastille Day','2025-08-15':'Assumption','2025-11-01':'All Saints’ Day','2025-11-11':'Armistice Day','2025-12-25':'Christmas',
-      '2026-01-01':'New Year','2026-04-06':'Easter Monday','2026-05-01':'Labour Day','2026-05-08':'Victory in Europe Day','2026-05-14':'Ascension Day','2026-05-25':'Whit Monday','2026-07-14':'Bastille Day','2026-08-15':'Assumption','2026-11-01':'All Saints’ Day','2026-11-11':'Armistice Day','2026-12-25':'Christmas'
+      '2025-01-01':'New Year',
+      '2025-04-21':'Easter Monday',
+      '2025-05-01':'Labour Day',
+      '2025-05-08':'Victory in Europe Day',
+      '2025-05-29':'Ascension Day',
+      '2025-06-09':'Whit Monday',
+      '2025-07-14':'Bastille Day',
+      '2025-08-15':'Assumption',
+      '2025-11-01':'All Saints’ Day',
+      '2025-11-11':'Armistice Day',
+      '2025-12-25':'Christmas',
+      '2026-01-01':'New Year',
+      '2026-04-06':'Easter Monday',
+      '2026-05-01':'Labour Day',
+      '2026-05-08':'Victory in Europe Day',
+      '2026-05-14':'Ascension Day',
+      '2026-05-25':'Whit Monday',
+      '2026-07-14':'Bastille Day',
+      '2026-08-15':'Assumption',
+      '2026-11-01':'All Saints’ Day',
+      '2026-11-11':'Armistice Day',
+      '2026-12-25':'Christmas'
     };
 
     const FIREBASE_CONFIG = {
-      apiKey:"AIzaSyAIG0xtx8GrdTYC7wVvpG74hB8ILvDnsgA",
-      authDomain:"lab-duty-micro.firebaseapp.com",
-      projectId:"lab-duty-micro",
-      storageBucket:"lab-duty-micro.firebasestorage.app",
-      messagingSenderId:"1033748176559",
-      appId:"1:1033748176559:web:75faef74de0023cc807e5a",
-      measurementId:"G-K6RPGETF8B"
+      apiKey: "AIzaSyAIG0xtx8GrdTYC7wVvpG74hB8ILvDnsgA",
+      authDomain: "lab-duty-micro.firebaseapp.com",
+      projectId: "lab-duty-micro",
+      storageBucket: "lab-duty-micro.firebasestorage.app",
+      messagingSenderId: "1033748176559",
+      appId: "1:1033748176559:web:75faef74de0023cc807e5a",
+      measurementId: "G-K6RPGETF8B"
     };
 
-    const CHECKITEMS=[
-      {id:'benches',label:'Wipe benches'},{id:'trash',label:'Empty trash (non-bio)'},{id:'biohaz',label:'Biohazard bin'},
-      {id:'floor',label:'Sweep/mop floor'},{id:'hoods',label:'Clean biosafety hoods surfaces'},{id:'incub',label:'Check CO₂ incubator trays'},
-      {id:'stock',label:'Refill towels/soap/ethanol'},
+    const CHECKITEMS = [
+      { id:'benches', label:'Wipe benches' },
+      { id:'trash', label:'Empty trash (non-bio)' },
+      { id:'biohaz', label:'Biohazard bin' },
+      { id:'floor', label:'Sweep/mop floor' },
+      { id:'hoods', label:'Clean biosafety hoods surfaces' },
+      { id:'incub', label:'Check CO₂ incubator trays' },
+      { id:'stock', label:'Refill towels/soap/ethanol' },
     ];
 
     /******** 1) Firebase ********/
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
     import { getAuth, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
     import {
-      getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot,
-      query, where, orderBy, serverTimestamp, addDoc, waitForPendingWrites
+      getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, query, where, orderBy,
+      serverTimestamp, addDoc, waitForPendingWrites
     } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
     const app = initializeApp(FIREBASE_CONFIG);
@@ -171,64 +217,68 @@
     const db = getFirestore(app);
 
     /******** 2) Helpers ********/
-    const $ = (s)=>document.querySelector(s), $$ = (s)=>Array.from(document.querySelectorAll(s));
+    const $  = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
     const esc = (s)=> (s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const toKey = (d)=>{const y=d.getFullYear();const m=('0'+(d.getMonth()+1)).slice(-2);const dd=('0'+d.getDate()).slice(-2);return `${y}-${m}-${dd}`;};
-    const fromKey = (k)=>{const [y,m,dd]=k.split('-').map(Number);return new Date(y,m-1,dd);};
-    const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
-    const startOfMonth=(d)=> new Date(d.getFullYear(), d.getMonth(), 1);
-    const endOfMonth=(d)=> new Date(d.getFullYear(), d.getMonth()+1, 0);
-    function monthBounds(d,span=1){const a=new Date(d.getFullYear(),d.getMonth(),1);const b=new Date(d.getFullYear(),d.getMonth()+span,0);return [a,b];}
+
+    const toKey = (d) => { const y=d.getFullYear(); const m=('0'+(d.getMonth()+1)).slice(-2); const dd=('0'+d.getDate()).slice(-2); return `${y}-${m}-${dd}`; };
+    const fromKey = (k) => { const [y,m,dd]=k.split('-').map(Number); return new Date(y,m-1,dd); };
+    const addDays = (d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+    const startOfMonth = (d)=> new Date(d.getFullYear(), d.getMonth(), 1);
+    const endOfMonth   = (d)=> new Date(d.getFullYear(), d.getMonth()+1, 0);
+    function monthBounds(d, span=1){ const a = new Date(d.getFullYear(), d.getMonth(), 1); const b = new Date(d.getFullYear(), d.getMonth()+span, 0); return [a,b]; }
     function gridRangeWeekdays(cursor){
-      const start=startOfMonth(cursor), end=endOfMonth(cursor);
-      const s=addDays(start,-((start.getDay()+6)%7));
-      const e=addDays(end,(5-((end.getDay()+6)%7)+7)%7);
-      const days=[];let cur=new Date(s);while(cur<=e){const dow=(cur.getDay()+6)%7;if(dow<5) days.push(new Date(cur));cur=addDays(cur,1);}
+      const start = startOfMonth(cursor), end = endOfMonth(cursor);
+      const s = addDays(start, -((start.getDay()+6)%7)); const e = addDays(end, (5 - ((end.getDay()+6)%7) + 7)%7);
+      const days=[]; let cur=new Date(s); while(cur<=e){ const dow=(cur.getDay()+6)%7; if(dow<5) days.push(new Date(cur)); cur=addDays(cur,1); }
       return { days, start, end };
     }
-    const nameById=(id)=> id===ADMIN_ID? ADMIN_LABEL : (TEAM.find(t=>t.id===id)?.name || null);
-    const isHolidayKey=(k)=> !!HOLIDAYS[k];
+    const nameById = (id)=> id===ADMIN_ID? ADMIN_LABEL : (TEAM.find(t=>t.id===id)?.name || null);
+    const isHolidayKey = (k)=> !!HOLIDAYS[k];
 
     /******** 3) State ********/
-    let cursor=startOfMonth(new Date()), spanMonths=1;
-    let meId=localStorage.getItem('labduty_meId');
-    let adminOK=false;
+    let cursor = startOfMonth(new Date());
+    let spanMonths = 1;
+    let meId = localStorage.getItem('labduty_meId');
+    let adminOK = false;
 
-    const daysMap={};
-    let rangeUnsub=null;
-    let profileUnsub=null;
-
-    // отдельные подписки на сообщения
-    const msgUnsubs=[];
-    const msgStoreAll=new Map();    // для админа — все сообщения
-    const msgStoreUser=new Map();   // kind=='user'
-    const msgStoreSystem=new Map(); // kind=='system'
-    const msgStoreSwaps=new Map();  // visibleTeamIds array-contains meId
-    const commentUnsubs={};
+    const daysMap = {};
+    let rangeUnsub = null;
+    let messagesUnsub = null;
+    let profileUnsub = null;
+    const commentUnsubs = {};
+    let messagesCache = {}; // id -> message
 
     async function ensureAnon(){ if(!auth.currentUser) await signInAnonymously(auth); }
 
     /******** 4) Profiles ********/
     async function saveMyProfileTeam(isAdminOverride=null){
       await ensureAnon();
-      const u=auth.currentUser; if(!u) return;
-      const pref=doc(db,'profiles',u.uid);
-      const data={};
-      if(meId) data.teamId=meId;
-      if(isAdminOverride!==null) data.isAdmin=!!isAdminOverride;
+      const u = auth.currentUser; if(!u) return;
+      const pref = doc(db,'profiles', u.uid);
+      const data = {};
+      if(meId) data.teamId = meId;
+      if(isAdminOverride !== null) data.isAdmin = !!isAdminOverride;
+
       await setDoc(pref, data, { merge:true });
       await waitForPendingWrites(db);
-      try{ await getDoc(pref); }catch(_){}
+      try { await getDoc(pref); } catch(_) {}
     }
 
     /******** 5) Identity/Admin UI ********/
     async function setMe(id){
       if(id===ADMIN_ID){
-        const x=prompt('Enter admin code');
-        if(x===ADMIN_CODE){ adminOK=true; meId=null; localStorage.removeItem('labduty_meId'); await saveMyProfileTeam(true); }
-        else{ alert('Wrong code'); adminOK=false; meId=null; await saveMyProfileTeam(false); }
+        const x = prompt('Enter admin code');
+        if(x===ADMIN_CODE){
+          adminOK=true; meId=null; localStorage.removeItem('labduty_meId');
+          await saveMyProfileTeam(true);
+        }else{
+          alert('Wrong code');
+          adminOK=false; meId=null;
+          await saveMyProfileTeam(false);
+        }
       }else{
-        adminOK=false; meId=id||null;
+        meId=id||null; adminOK=false;
         if(meId) localStorage.setItem('labduty_meId',meId); else localStorage.removeItem('labduty_meId');
         await saveMyProfileTeam(false);
       }
@@ -239,12 +289,12 @@
     }
 
     function renderHeader(){
-      const sel=$('#identitySelect');
+      const sel = $('#identitySelect');
       sel.innerHTML = '<option value="">&mdash; choose &mdash;</option>'
         + TEAM.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')
         + `<option value="${ADMIN_ID}">${ADMIN_LABEL}</option>`;
       sel.value = meId || (adminOK? ADMIN_ID : '');
-      $('#whoami').textContent = adminOK ? (ADMIN_LABEL+' ✓') : (meId ? (nameById(meId)+' ✓') : '—');
+      $('#whoami').textContent = adminOK ? (ADMIN_LABEL+' ✓') : (meId ? (nameById(meId)+ ' ✓') : '—');
 
       $('#teamPanel').classList.toggle('hidden', !adminOK);
       $('#btnAdminExit').classList.toggle('hidden', !adminOK);
@@ -254,236 +304,227 @@
       renderTeamChips();
       paintAll();
     }
-    $('#identitySelect').addEventListener('change',(e)=> setMe(e.target.value || null));
+    $('#identitySelect').addEventListener('change', (e)=> setMe(e.target.value || null));
     $('#btnAdminExit').addEventListener('click', async ()=>{
-      adminOK=false; await saveMyProfileTeam(false);
-      renderHeader(); resubscribeMessages(); paintAll();
+      adminOK=false;
+      await saveMyProfileTeam(false);
+      renderHeader();
+      resubscribeMessages();
+      paintAll();
     });
 
     function renderTeamChips(){
-      const box=$('#teamChips'); box.innerHTML='';
+      const box = $('#teamChips'); box.innerHTML='';
       TEAM.forEach(t=>{
-        const el=document.createElement('div');
+        const el = document.createElement('div');
         el.className='inline-flex items-center gap-2 px-3 py-1 rounded-full border bg-white text-sm';
-        el.textContent=t.name; el.draggable=adminOK;
-        el.addEventListener('dragstart',(e)=>{ e.dataTransfer.setData('text/plain',t.id); });
+        el.textContent=t.name; el.draggable = adminOK;
+        el.addEventListener('dragstart', (e)=>{ e.dataTransfer.setData('text/plain', t.id); });
         box.appendChild(el);
       });
     }
 
     /******** 6) Days ********/
-    function rangeKeyBounds(d,span){ const [a,b]=monthBounds(d,span); return [toKey(a),toKey(b)]; }
+    function rangeKeyBounds(d, span){ const [a,b] = monthBounds(d, span); return [toKey(a), toKey(b)]; }
+
     function subscribeRange(){
       if(rangeUnsub) rangeUnsub();
-      const [a,b]=rangeKeyBounds(cursor,spanMonths);
-      const qy=query(collection(db,'days'), where('date','>=',a), where('date','<=',b), orderBy('date','asc'));
-      rangeUnsub=onSnapshot(qy,(qs)=>{
-        qs.forEach(docSnap=>{ const d=migrateDay(docSnap.data()); daysMap[docSnap.id]=d; });
+      const [a,b] = rangeKeyBounds(cursor, spanMonths);
+      const qy = query(collection(db,'days'), where('date','>=',a), where('date','<=',b), orderBy('date','asc'));
+      rangeUnsub = onSnapshot(qy, (qs)=>{
+        qs.forEach(docSnap=>{ const d = migrateDay(docSnap.data()); daysMap[docSnap.id] = d; });
         renderCalendar(); renderChecklist();
-      },(err)=>{ console.error('days onSnapshot error',err); });
-    }
-    function migrateDay(d){
-      if(!d) return null;
-      const out={ date:d.date, assignees:[], swapRequestedIds:[], note:d.note||'', checklist:d.checklist||{}, doneAt:d.doneAt||null, updatedAt:d.updatedAt||null };
-      if(Array.isArray(d.assignees)) out.assignees=d.assignees; else if(d.assigneeId) out.assignees=d.assigneeId?[d.assigneeId]:[];
-      if(Array.isArray(d.swapRequestedIds)) out.swapRequestedIds=d.swapRequestedIds; else if(d.swapRequested) out.swapRequestedIds=d.assigneeId?[d.assigneeId]:[];
-      return out;
-    }
-    async function setAssignees(dayKey,ids){
-      const ref=doc(db,'days',dayKey); const snap=await getDoc(ref);
-      const base=snap.exists()?migrateDay(snap.data()):{date:dayKey,assignees:[],swapRequestedIds:[],note:'',checklist:{}};
-      const newSwaps=(base.swapRequestedIds||[]).filter(x=>ids.includes(x));
-      await setDoc(ref,{...base,assignees:ids,swapRequestedIds:newSwaps,updatedAt:serverTimestamp()});
-    }
-    async function toggleSwap(dayKey,whoId){
-      const ref=doc(db,'days',dayKey); const snap=await getDoc(ref); if(!snap.exists()) return;
-      const d=migrateDay(snap.data()); const set=new Set(d.swapRequestedIds);
-      if(set.has(whoId)) set.delete(whoId); else set.add(whoId);
-      await updateDoc(ref,{swapRequestedIds:[...set],updatedAt:serverTimestamp()});
-    }
-    async function saveChecklist(todayKey,checklist){
-      const ref=doc(db,'days',todayKey); const snap=await getDoc(ref);
-      const base=snap.exists()?migrateDay(snap.data()):{date:todayKey,assignees:[],swapRequestedIds:[],note:'',checklist:{}};
-      await setDoc(ref,{...base,checklist,updatedAt:serverTimestamp()});
-    }
-    async function markDone(todayKey){
-      const ref=doc(db,'days',todayKey); const snap=await getDoc(ref);
-      const base=snap.exists()?migrateDay(snap.data()):{date:todayKey,assignees:[],swapRequestedIds:[],note:'',checklist:{}};
-      await setDoc(ref,{...base,doneAt:serverTimestamp(),updatedAt:serverTimestamp()});
+      }, (err)=>{ console.error('days onSnapshot error', err); });
     }
 
-    /******** 7) Messages: подписки ********/
-    function clearMsgSubscriptions(){
-      msgUnsubs.forEach(u=>{ try{u();}catch(_){}}); msgUnsubs.length=0;
-      Object.values(commentUnsubs).forEach(u=>{ try{u();}catch(_){}}); for(const k in commentUnsubs) delete commentUnsubs[k];
-      msgStoreAll.clear(); msgStoreUser.clear(); msgStoreSystem.clear(); msgStoreSwaps.clear();
-      $('#feed').innerHTML='';
+    function migrateDay(d){
+      if(!d) return null;
+      const out = { date:d.date, assignees:[], swapRequestedIds:[], note:d.note||'', checklist:d.checklist||{}, doneAt:d.doneAt||null, updatedAt:d.updatedAt||null };
+      if(Array.isArray(d.assignees)) out.assignees = d.assignees; else if(d.assigneeId) out.assignees = d.assigneeId ? [d.assigneeId] : [];
+      if(Array.isArray(d.swapRequestedIds)) out.swapRequestedIds = d.swapRequestedIds; else if(d.swapRequested) out.swapRequestedIds = d.assigneeId ? [d.assigneeId] : [];
+      return out;
+    }
+
+    async function setAssignees(dayKey, ids){
+      const ref = doc(db,'days',dayKey);
+      const snap = await getDoc(ref);
+      const base = snap.exists()? migrateDay(snap.data()) : { date:dayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+      const newSwaps = (base.swapRequestedIds||[]).filter(x=> ids.includes(x));
+      await setDoc(ref, { ...base, assignees: ids, swapRequestedIds: newSwaps, updatedAt: serverTimestamp() });
+    }
+
+    async function toggleSwap(dayKey, whoId){
+      const ref = doc(db,'days',dayKey);
+      const snap = await getDoc(ref); if(!snap.exists()) return;
+      const d = migrateDay(snap.data());
+      const set = new Set(d.swapRequestedIds);
+      const wasSet = set.has(whoId);
+      if(set.has(whoId)) set.delete(whoId); else set.add(whoId);
+      await updateDoc(ref, { swapRequestedIds:[...set], updatedAt: serverTimestamp() });
+      // Если пользователь снял флаг — закрыть все его офферы по этому дню
+      if(wasSet){ await resolvePendingSwapMessages(dayKey, whoId); }
+    }
+
+    async function saveChecklist(todayKey, checklist){
+      const ref = doc(db,'days',todayKey);
+      const snap = await getDoc(ref);
+      const base = snap.exists()? migrateDay(snap.data()) : { date:todayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+      await setDoc(ref,{ ...base, checklist, updatedAt: serverTimestamp() });
+    }
+
+    async function markDone(todayKey){
+      const ref = doc(db,'days',todayKey);
+      const snap = await getDoc(ref);
+      const base = snap.exists()? migrateDay(snap.data()) : { date:todayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+      await setDoc(ref,{ ...base, doneAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    }
+
+    /******** 7) Messages ********/
+    function subscribeProfile(){
+      if(profileUnsub){ try{ profileUnsub(); }catch(_){} profileUnsub=null; }
+      const u = auth.currentUser; if(!u) return;
+      profileUnsub = onSnapshot(doc(db,'profiles',u.uid), ()=>{
+        resubscribeMessages();
+      });
     }
 
     function resubscribeMessages(){
-      clearMsgSubscriptions();
+      if(messagesUnsub){ try{ messagesUnsub(); }catch(_){} messagesUnsub=null; }
+      Object.values(commentUnsubs).forEach(unsub => { try{ unsub(); }catch(_){} });
+      for(const k in commentUnsubs) delete commentUnsubs[k];
 
-      // Админ видит всё
-      if(adminOK){
-        const unsub=onSnapshot(collection(db,'messages'), (qs)=> {
-          msgStoreAll.clear();
-          qs.forEach(docSnap=> msgStoreAll.set(docSnap.id, { id:docSnap.id, m:docSnap.data() }));
-          renderFeed(Array.from(msgStoreAll.values()));
-        }, (err)=> console.error('messages/all error', err));
-        msgUnsubs.push(unsub);
-        return;
-      }
+      const col = collection(db,'messages');
+      messagesUnsub = onSnapshot(col, { includeMetadataChanges:true }, (qs)=>{
+        const items = [];
+        messagesCache = {};
+        qs.forEach(docSnap => {
+          const m = docSnap.data();
+          messagesCache[docSnap.id] = m;
+          items.push({ id: docSnap.id, m });
+        });
 
-      // Обычный пользователь: 3 простые подписки
-      const qUser = query(collection(db,'messages'), where('kind','==','user'));
-      const qSystem = query(collection(db,'messages'), where('kind','==','system'));
-      const qSwaps = meId ? query(collection(db,'messages'), where('visibleTeamIds','array-contains', meId)) : null;
+        // приватные обмены — видны участникам (по visibleTeamIds ИЛИ meta.from/to) и админу
+        const filtered = items.filter(({m})=>{
+          if(adminOK) return true;
+          if(m.kind==='swap_offer' || m.kind==='swap_counter'){
+            const vis = Array.isArray(m.visibleTeamIds) ? m.visibleTeamIds : [];
+            const byVis  = meId && vis.includes(meId);
+            const byMeta = meId && m.meta && (m.meta.from===meId || m.meta.to===meId);
+            return byVis || byMeta;
+          }
+          return true;
+        });
 
-      const unsubU = onSnapshot(qUser, (qs)=>{
-        msgStoreUser.clear();
-        qs.forEach(ds=> msgStoreUser.set(ds.id,{ id:ds.id, m:ds.data() }));
-        mergeAndRender();
-      }, (err)=> console.error('messages/user error',err));
-      msgUnsubs.push(unsubU);
+        filtered.sort((a,b)=>{
+          const ta = (a.m.createdAtMs??0) || (a.m.createdAt?.toMillis?.()||0);
+          const tb = (b.m.createdAtMs??0) || (b.m.createdAt?.toMillis?.()||0);
+          return tb - ta;
+        });
 
-      const unsubS = onSnapshot(qSystem, (qs)=>{
-        msgStoreSystem.clear();
-        qs.forEach(ds=> msgStoreSystem.set(ds.id,{ id:ds.id, m:ds.data() }));
-        mergeAndRender();
-      }, (err)=> console.error('messages/system error',err));
-      msgUnsubs.push(unsubS);
+        const cutoff = Date.now() - 24*3600*1000;
+        const feed = $('#feed'); feed.innerHTML='';
 
-      if(qSwaps){
-        const unsubW = onSnapshot(qSwaps, (qs)=>{
-          msgStoreSwaps.clear();
-          qs.forEach(ds=>{
-            const m=ds.data();
-            if(m.kind==='swap_offer' || m.kind==='swap_counter') // страхуемся
-              msgStoreSwaps.set(ds.id,{ id:ds.id, m });
-          });
-          mergeAndRender();
-        }, (err)=> console.error('messages/swaps error',err));
-        msgUnsubs.push(unsubW);
-      }else{
-        // если не выбран участник — всё равно перерисуем (user/system будут)
-        mergeAndRender();
-      }
+        filtered.forEach(({id,m})=>{
+          const resolvedMs = m.resolvedAt?.toMillis ? m.resolvedAt.toMillis() : (m.resolvedAt? new Date(m.resolvedAt).getTime() : null);
+          const deletedMs = m.deletedAt?.toMillis ? m.deletedAt.toMillis() : (m.deletedAt? new Date(m.deletedAt).getTime() : null);
 
-      function mergeAndRender(){
-        // Сливаем три источника, исключая дубли
-        const map=new Map();
-        for(const s of [msgStoreUser, msgStoreSystem, msgStoreSwaps]){
-          s.forEach((v,k)=> map.set(k,v));
-        }
-        renderFeed(Array.from(map.values()));
-      }
-    }
+          if(!adminOK){
+            if(deletedMs) return;
+            if(resolvedMs && resolvedMs < cutoff) return;
+          }
 
-    function renderFeed(items){
-      // Сортировка
-      items.sort((a,b)=>{
-        const ta=(a.m.createdAtMs??0) || (a.m.createdAt?.toMillis?.()||0);
-        const tb=(b.m.createdAtMs??0) || (b.m.createdAt?.toMillis?.()||0);
-        return tb - ta;
-      });
+          const isSwap = (m.kind==='swap_offer' || m.kind==='swap_counter' || (m.kind==='system' && (m.meta?.type==='swap_accept' || m.meta?.type==='swap_done')));
+          const isCongrats = (m.kind==='system' && m.meta?.type==='checklist_done');
 
-      const cutoff = Date.now() - 24*3600*1000;
-      const feed=$('#feed'); feed.innerHTML='';
+          const card = document.createElement('div');
+          card.className = 'rounded-xl border p-3 bg-white';
+          if(isSwap) card.className += adminOK ? ' msg-swap msg-swap-admin border' : ' msg-swap';
+          if(isCongrats) card.className = 'rounded-xl p-3 msg-congrats';
+          if(m.resolvedAt && !m.deletedAt) card.className += ' msg-resolved';
+          if(m.deletedAt) card.classList.add('opacity-60');
 
-      items.forEach(({id,m})=>{
-        const resolvedMs = m.resolvedAt?.toMillis ? m.resolvedAt.toMillis() : (m.resolvedAt? new Date(m.resolvedAt).getTime() : null);
-        const deletedMs  = m.deletedAt?.toMillis ? m.deletedAt.toMillis() : (m.deletedAt? new Date(m.deletedAt).getTime() : null);
-        if(!adminOK){
-          if(deletedMs) return;
-          if(resolvedMs && resolvedMs < cutoff) return;
-        }
+          const who = esc(m.authorName||'Anon');
+          const headerRight = [];
+          if(m.resolvedAt){ headerRight.push(`<span class='inline-flex items-center gap-1 px-1.5 py-0.5 rounded border'>Resolved: ${m.resolvedAt?.toDate? m.resolvedAt.toDate().toLocaleString():''}</span>`); }
+          if(m.deletedAt){ headerRight.push(`<span class='inline-flex items-center gap-1 px-1.5 py-0.5 rounded border'>Deleted: ${m.deletedAt?.toDate? m.deletedAt.toDate().toLocaleString():''}</span>`); }
+          const tsNum = (m.createdAtMs??0) || (m.createdAt?.toMillis?.()||0);
+          headerRight.push(`<span>${tsNum? new Date(tsNum).toLocaleString() : ''}</span>`);
 
-        const isSwap = (m.kind==='swap_offer' || m.kind==='swap_counter' || (m.kind==='system' && (m.meta?.type==='swap_accept' || m.meta?.type==='swap_done')));
-        const isCongrats = (m.kind==='system' && m.meta?.type==='checklist_done');
-
-        const card=document.createElement('div');
-        card.className='rounded-xl border p-3 bg-white';
-        if(isSwap) card.className += adminOK ? ' msg-swap msg-swap-admin border' : ' msg-swap';
-        if(isCongrats) card.className='rounded-xl p-3 msg-congrats';
-        if(m.deletedAt) card.classList.add('opacity-60');
-
-        const who=esc(m.authorName||'Anon');
-        const headerRight=[];
-        if(m.resolvedAt){ headerRight.push(`<span class='inline-flex items-center gap-1 px-1.5 py-0.5 rounded border'>Resolved: ${m.resolvedAt?.toDate? m.resolvedAt.toDate().toLocaleString():''}</span>`); }
-        if(m.deletedAt){ headerRight.push(`<span class='inline-flex items-center gap-1 px-1.5 py-0.5 rounded border'>Deleted: ${m.deletedAt?.toDate? m.deletedAt.toDate().toLocaleString():''}</span>`); }
-        const tsNum=(m.createdAtMs??0)||(m.createdAt?.toMillis?.()||0);
-        headerRight.push(`<span>${tsNum? new Date(tsNum).toLocaleString():''}</span>`);
-
-        card.innerHTML = `
-          <div class="flex items-start gap-2">
-            <div class="text-sm font-medium">${who}</div>
-            <div class="ml-auto text-xs text-slate-600 flex items-center gap-2">${headerRight.join(' ')}</div>
-          </div>
-          <div class="mt-2 text-sm whitespace-pre-wrap">${esc(m.text||'')}</div>
-          <div class="mt-2 flex items-center gap-2" id="actions_${id}">${renderMessageButtonsHTML(m,id)}</div>
-          <details class="mt-2" id="det_${id}">
-            <summary class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50 inline">Comments</summary>
-            <div class="mt-2 space-y-2" id="cm_${id}"></div>
-            <div class="mt-2 flex items-center gap-2">
-              <input class="flex-1 border rounded-lg px-2 py-1 text-sm" placeholder="Write a comment…" id="cmi_${id}">
-              <button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="sendc" data-id="${id}">Send</button>
+          card.innerHTML = `
+            <div class="flex items-start gap-2">
+              <div class="text-sm font-medium">${who}</div>
+              <div class="ml-auto text-xs text-slate-600 flex items-center gap-2">${headerRight.join(' ')}</div>
             </div>
-          </details>
-        `;
-        wireMessageButtons(card,m,id);
+            <div class="mt-2 text-sm whitespace-pre-wrap">${esc(m.text||'')}</div>
+            <div class="mt-2 flex items-center gap-2" id="actions_${id}">
+              ${renderMessageButtonsHTML(m, id)}
+            </div>
+            <details class="mt-2" id="det_${id}">
+              <summary class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50 inline">Comments</summary>
+              <div class="mt-2 space-y-2" id="cm_${id}"></div>
+              <div class="mt-2 flex items-center gap-2">
+                <input class="flex-1 border rounded-lg px-2 py-1 text-sm" placeholder="Write a comment…" id="cmi_${id}">
+                <button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="sendc" data-id="${id}">Send</button>
+              </div>
+            </details>
+          `;
 
-        card.querySelector('button[data-act="sendc"]').onclick = async ()=>{
-          const input=card.querySelector('#cmi_'+id); const text=input.value.trim(); if(!text) return;
-          await ensureAnon(); const u=auth.currentUser;
-          try{
-            await addDoc(collection(db,'messages',id,'comments'),{
-              text,createdAt:serverTimestamp(),createdAtMs:Date.now(),
-              authorId:u?.uid||'anon',authorName:nameById(meId)||'Anon'
-            }); input.value='';
-          }catch(e){ console.error(e); alert('Failed'); }
-        };
+          wireMessageButtons(card, m, id);
 
-        feed.appendChild(card);
+          card.querySelector('button[data-act="sendc"]').onclick = async ()=>{
+            const input = card.querySelector('#cmi_'+id); const text = input.value.trim(); if(!text) return;
+            await ensureAnon();
+            const u = auth.currentUser;
+            try{
+              await addDoc(collection(db,'messages', id, 'comments'), {
+                text, createdAt: serverTimestamp(), createdAtMs: Date.now(),
+                authorId: u?.uid||'anon', authorName: nameById(meId)||'Anon'
+              }); input.value='';
+            }catch(e){ console.error(e); alert('Failed'); }
+          };
 
-        // subscribe comments
-        const cq=collection(db,'messages',id,'comments');
-        const cunsub=onSnapshot(cq,{includeMetadataChanges:true},(cqs)=>{
-          const arr=[]; cqs.forEach(cs=>arr.push(cs.data()));
-          arr.sort((a,b)=> ((a.createdAtMs??0)||(a.createdAt?.toMillis?.()||0)) - ((b.createdAtMs??0)||(b.createdAt?.toMillis?.()||0)));
-          const box=$('#cm_'+id), det=$('#det_'+id); if(!box||!det) return; box.innerHTML='';
-          let count=0;
-          arr.forEach(c=>{
-            const tss=((c.createdAtMs??0)||(c.createdAt?.toMillis?.()||0));
-            const row=document.createElement('div'); row.className='text-xs';
-            row.innerHTML=`<span class="font-medium">${esc(c.authorName||'Anon')}:</span> ${esc(c.text||'')} <span class="text-slate-400">${tss? new Date(tss).toLocaleString():''}</span>`;
-            box.appendChild(row); count++;
-          });
-          if(count>0) det.open=true;
-        },(err)=> console.error('comments error',err));
-        commentUnsubs[id]=cunsub;
-      });
+          $('#feed').appendChild(card);
+
+          // comments subscribe
+          const cq = collection(db,'messages', id, 'comments');
+          const unsub = onSnapshot(cq, { includeMetadataChanges:true }, (cqs)=>{
+            const arr=[]; cqs.forEach(cs=> arr.push(cs.data()));
+            arr.sort((a,b)=> ((a.createdAtMs??0)||(a.createdAt?.toMillis?.()||0)) - ((b.createdAtMs??0)||(b.createdAt?.toMillis?.()||0)));
+            const box = $('#cm_'+id); const det = $('#det_'+id); if(!box||!det) return; box.innerHTML='';
+            let count=0;
+            arr.forEach(c=>{
+              const tss = ((c.createdAtMs??0)||(c.createdAt?.toMillis?.()||0));
+              const row=document.createElement('div'); row.className='text-xs';
+              row.innerHTML=`<span class="font-medium">${esc(c.authorName||'Anon')}:</span> ${esc(c.text||'')} <span class="text-slate-400">${tss? new Date(tss).toLocaleString():''}</span>`;
+              box.appendChild(row); count++;
+            });
+            if(count>0) det.open = true;
+          }, (err)=>{ console.error('comments onSnapshot error', err); });
+          commentUnsubs[id] = unsub;
+        });
+      }, (err)=>{ console.error('messages onSnapshot error', err); });
     }
 
-    function renderMessageButtonsHTML(m,id){
-      const resolved=!!m.resolvedAt, deleted=!!m.deletedAt;
-      const parts=[];
-      parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="resolve" data-id="${id}" ${resolved?'disabled':''}>${resolved?'Resolved ✓':'Mark resolved'}</button>`);
+    function renderMessageButtonsHTML(m, id){
+      const resolved = !!m.resolvedAt; const deleted = !!m.deletedAt;
+      const parts = [];
+      parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="resolve" data-id="${id}" ${resolved? 'disabled':''}>${resolved? 'Resolved ✓':'Mark resolved'}</button>`);
       if(adminOK){
-        if(resolved) parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="undo" data-id="${id}">Undo resolve</button>`);
-        if(!deleted) parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="del" data-id="${id}">Delete</button>`);
-        if(deleted) parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="restore" data-id="${id}">Restore</button>`);
+        if(resolved){ parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="undo" data-id="${id}">Undo resolve</button>`); }
+        if(!deleted){ parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="del" data-id="${id}">Delete</button>`); }
+        if(deleted){ parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="restore" data-id="${id}">Restore</button>`); }
       }
       if(m.kind==='swap_offer' && meId){
-        const isRecipient=m.meta?.to===meId;
-        if((isRecipient||adminOK) && !m.deletedAt){
+        const isRecipient = m.meta?.to === meId;
+        if((isRecipient || adminOK) && !m.deletedAt){
           parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="swap_accept" data-id="${id}">Accept offer</button>`);
           parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="swap_decline" data-id="${id}">Decline</button>`);
           parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="swap_counter" data-id="${id}">Propose different date</button>`);
         }
       }
       if(m.kind==='swap_counter' && meId){
-        const isRecipient=m.meta?.to===meId;
-        if((isRecipient||adminOK) && !m.deletedAt){
+        const isRecipient = m.meta?.to === meId;
+        if((isRecipient || adminOK) && !m.deletedAt){
           parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="swap_accept_counter" data-id="${id}">Accept counter</button>`);
           parts.push(`<button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="swap_decline" data-id="${id}">Decline</button>`);
         }
@@ -491,38 +532,53 @@
       return parts.join('');
     }
 
-    function wireMessageButtons(card,m,id){
-      const btnResolve=card.querySelector('button[data-act="resolve"]');
-      if(btnResolve) btnResolve.onclick=async()=>{ try{ await ensureAnon(); await updateDoc(doc(db,'messages',id),{ resolvedAt:serverTimestamp() }); }catch(e){ console.error(e); alert('Failed'); } };
+    function wireMessageButtons(card, m, id){
+      const btnResolve = card.querySelector('button[data-act="resolve"]');
+      if(btnResolve) btnResolve.onclick = async ()=>{ try{ await ensureAnon(); await updateDoc(doc(db,'messages', id), { resolvedAt: serverTimestamp() }); }catch(e){ console.error(e); alert('Failed'); } };
 
-      const bUndo=card.querySelector('button[data-act="undo"]');
-      if(bUndo) bUndo.onclick=async()=>{ if(!adminOK) return; try{ await ensureAnon(); await updateDoc(doc(db,'messages',id),{ resolvedAt:null }); }catch(e){ console.error(e); alert('Failed'); } };
+      const bUndo = card.querySelector('button[data-act="undo"]');
+      if(bUndo) bUndo.onclick = async ()=>{ if(!adminOK) return; try{ await ensureAnon(); await updateDoc(doc(db,'messages', id), { resolvedAt: null }); }catch(e){ console.error(e); alert('Failed'); } };
 
-      const bDel=card.querySelector('button[data-act="del"]');
-      if(bDel) bDel.onclick=async()=>{ if(!adminOK) return; try{ await ensureAnon(); await updateDoc(doc(db,'messages',id),{ deletedAt:serverTimestamp() }); }catch(e){ console.error(e); alert('Failed'); } };
+      const bDel = card.querySelector('button[data-act="del"]');
+      if(bDel) bDel.onclick = async ()=>{ if(!adminOK) return; try{ await ensureAnon(); await updateDoc(doc(db,'messages', id), { deletedAt: serverTimestamp() }); }catch(e){ console.error(e); alert('Failed'); } };
 
-      const bRes=card.querySelector('button[data-act="restore"]');
-      if(bRes) bRes.onclick=async()=>{ if(!adminOK) return; try{ await ensureAnon(); await updateDoc(doc(db,'messages',id),{ deletedAt:null }); }catch(e){ console.error(e); alert('Failed'); } };
+      const bRes = card.querySelector('button[data-act="restore"]');
+      if(bRes) bRes.onclick = async ()=>{ if(!adminOK) return; try{ await ensureAnon(); await updateDoc(doc(db,'messages', id), { deletedAt: null }); }catch(e){ console.error(e); alert('Failed'); } };
 
-      const bAcc=card.querySelector('button[data-act="swap_accept"]');
-      if(bAcc) bAcc.onclick=async()=>{ try{ await ensureAnon(); await applySwapOffer(m); await updateDoc(doc(db,'messages',id),{ resolvedAt:serverTimestamp() }); }catch(e){ console.error(e); alert('Failed'); } };
+      const bAcc = card.querySelector('button[data-act="swap_accept"]');
+      if(bAcc) bAcc.onclick = async ()=>{ try{
+        await ensureAnon();
+        await applySwapOffer(m);
+        await updateDoc(doc(db,'messages', id), { resolvedAt: serverTimestamp(), deletedAt: serverTimestamp() });
+      }catch(e){ console.error(e); alert('Failed to accept'); } };
 
-      const bDecl=card.querySelector('button[data-act="swap_decline"]');
-      if(bDecl) bDecl.onclick=async()=>{ try{ await ensureAnon(); await updateDoc(doc(db,'messages',id),{ resolvedAt:serverTimestamp() }); await addSystemMsg(`❌ Swap offer declined.`,{ ref:id }, m.meta?.from||meId); }catch(e){ console.error(e); alert('Failed'); } };
+      const bDecl = card.querySelector('button[data-act="swap_decline"]');
+      if(bDecl) bDecl.onclick = async ()=>{ try{
+        await ensureAnon();
+        await updateDoc(doc(db,'messages', id), { resolvedAt: serverTimestamp(), deletedAt: serverTimestamp() });
+        await addSystemMsg(`❌ Swap offer declined.`, { ref:id }, m.meta?.from || meId);
+      }catch(e){ console.error(e); alert('Failed'); } };
 
-      const bCtr=card.querySelector('button[data-act="swap_counter"]');
-      if(bCtr) bCtr.onclick=async()=>{
-        const myId=meId, otherId=m.meta?.from;
+      const bCtr = card.querySelector('button[data-act="swap_counter"]');
+      if(bCtr) bCtr.onclick = async ()=>{
+        const myId = meId;
+        const otherId = m.meta?.from;
         showDateModal({
-          title:'Propose a different date', mode:'counter', fromId:myId, toId:otherId,
+          title: 'Propose a different date',
+          mode: 'counter',
+          fromId: myId,
+          toId: otherId,
           onSelect: async (alt)=>{
             try{
-              await ensureAnon(); const u=auth.currentUser;
-              await addDoc(collection(db,'messages'),{
+              await ensureAnon();
+              const u = auth.currentUser;
+              await addDoc(collection(db,'messages'), {
                 text:`🔁 Counter-offer: ${alt}`,
-                createdAt:serverTimestamp(), createdAtMs:Date.now(),
-                authorId:u?.uid||'anon', authorName:nameById(myId)||'Anon',
-                kind:'swap_counter', meta:{ from:myId, to:otherId, date:m.meta.date, askDate:alt },
+                createdAt: serverTimestamp(), createdAtMs: Date.now(),
+                authorId: u?.uid||'anon',
+                authorName: nameById(myId)||'Anon',
+                kind:'swap_counter',
+                meta:{ from: myId, to: otherId, date: m.meta.date, askDate: alt },
                 visibleTeamIds:[myId, otherId]
               });
             }catch(e){ console.error(e); alert('Failed'); }
@@ -530,77 +586,106 @@
         });
       };
 
-      const bAccCtr=card.querySelector('button[data-act="swap_accept_counter"]');
-      if(bAccCtr) bAccCtr.onclick=async()=>{ try{ await ensureAnon(); await applySwapOffer(m); await updateDoc(doc(db,'messages',id),{ resolvedAt:serverTimestamp() }); }catch(e){ console.error(e); alert('Failed'); } };
+      const bAccCtr = card.querySelector('button[data-act="swap_accept_counter"]');
+      if(bAccCtr) bAccCtr.onclick = async ()=>{ try{
+        await ensureAnon();
+        await applySwapOffer(m);
+        await updateDoc(doc(db,'messages', id), { resolvedAt: serverTimestamp(), deletedAt: serverTimestamp() });
+      }catch(e){ console.error(e); alert('Failed'); } };
     }
 
-    async function addSystemMsg(text,meta={},authorTeamId=null){
-      await ensureAnon(); const u=auth.currentUser;
-      await addDoc(collection(db,'messages'),{
-        text,attachments:[],createdAt:serverTimestamp(),createdAtMs:Date.now(),resolvedAt:null,
-        authorId:u?.uid||'anon',authorName:nameById(authorTeamId||meId)||'System',
-        kind:'system',meta
+    async function addSystemMsg(text, meta={}, authorTeamId=null){
+      await ensureAnon();
+      const u = auth.currentUser;
+      await addDoc(collection(db,'messages'), {
+        text, attachments: [], createdAt: serverTimestamp(), createdAtMs: Date.now(), resolvedAt: null,
+        authorId: u?.uid||'anon', authorName: nameById(authorTeamId||meId)||'System',
+        kind:'system', meta
       });
     }
 
     async function applySwapOffer(m){
-      const dayKey=m.meta?.date, askDay=m.meta?.askDate||null;
-      const from=m.meta?.from, to=m.meta?.to;
-      if(!dayKey||!from||!to) throw new Error('Bad offer meta');
+      const dayKey = m.meta?.date;
+      const askDay = m.meta?.askDate || null;
+      const from = m.meta?.from;
+      const to = m.meta?.to;
+      if(!dayKey || !from || !to) throw new Error('Bad offer meta');
 
-      const dayRef=doc(db,'days',dayKey);
-      const snap=await getDoc(dayRef); if(!snap.exists()) throw new Error('Day missing');
-      const d=migrateDay(snap.data());
-      const nextAssignees=(d.assignees||[]).map(x=> x===to? from : x);
-      const nextSwaps=(d.swapRequestedIds||[]).filter(x=> x!==to);
-      await setAssignees(dayKey,nextAssignees);
-      await updateDoc(dayRef,{ swapRequestedIds:nextSwaps, updatedAt:serverTimestamp() });
+      const dayRef = doc(db,'days', dayKey);
+      const snap = await getDoc(dayRef); if(!snap.exists()) throw new Error('Day missing');
+      const d = migrateDay(snap.data());
+      const nextAssignees = (d.assignees||[]).map(x=> x===to? from : x);
+      const nextSwaps = (d.swapRequestedIds||[]).filter(x=> x!==to);
+      await setAssignees(dayKey, nextAssignees);
+      await updateDoc(dayRef, { swapRequestedIds: nextSwaps, updatedAt: serverTimestamp() });
 
       if(askDay){
-        const askRef=doc(db,'days',askDay);
-        const askSnap=await getDoc(askRef); if(!askSnap.exists()) throw new Error('Ask day missing');
-        const dd=migrateDay(askSnap.data());
+        const askRef = doc(db,'days', askDay);
+        const askSnap = await getDoc(askRef); if(!askSnap.exists()) throw new Error('Ask day missing');
+        const dd = migrateDay(askSnap.data());
         if(!(dd.assignees||[]).includes(from)) throw new Error('Volunteer not assigned on asked day');
-        const ass2=(dd.assignees||[]).map(x=> x===from? to : x);
-        await setAssignees(askDay,ass2);
+        const ass2 = (dd.assignees||[]).map(x=> x===from? to : x);
+        await setAssignees(askDay, ass2);
       }
 
       await addSystemMsg(
-        askDay ? `✅ Swap accepted: ${nameById(from)} ↔ ${nameById(to)} ( ${dayKey} ⇄ ${askDay} )`
-               : `✅ ${nameById(from)} covers ${dayKey} for ${nameById(to)}`,
-        { type:'swap_done', date:dayKey, askDate:askDay, from, to }, from
+        askDay
+          ? `✅ Swap accepted: ${nameById(from)} ↔ ${nameById(to)} ( ${dayKey} ⇄ ${askDay} )`
+          : `✅ ${nameById(from)} covers ${dayKey} for ${nameById(to)}`,
+        { type:'swap_done', date: dayKey, askDate: askDay, from, to },
+        from
       );
+    }
+
+    // Закрытие незавершённых своп-офферов при отмене флага
+    async function resolvePendingSwapMessages(dateKey, teamId){
+      const entries = Object.entries(messagesCache);
+      const toClose = entries.filter(([id,m]) =>
+        m && (m.kind==='swap_offer' || m.kind==='swap_counter')
+        && !m.resolvedAt && !m.deletedAt
+        && m.meta && m.meta.date === dateKey
+        && (m.meta.from === teamId || m.meta.to === teamId)
+      );
+      for (const [id,_m] of toClose){
+        try{
+          await updateDoc(doc(db,'messages', id), { resolvedAt: serverTimestamp(), deletedAt: serverTimestamp() });
+        }catch(e){ console.error('resolvePendingSwapMessages', e); }
+      }
     }
 
     /******** 8) Calendar UI ********/
     function renderMonthBlock(baseDate){
-      const month=new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
-      const { days }=gridRangeWeekdays(month);
+      const month = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+      const { days } = gridRangeWeekdays(month);
 
-      const block=document.createElement('section'); block.className='space-y-1';
-      const wdays=document.createElement('div');
-      wdays.className='grid grid-cols-5 text-center text-xs font-semibold text-slate-500';
-      wdays.innerHTML=`<div class="py-2">Mon</div><div class="py-2">Tue</div><div class="py-2">Wed</div><div class="py-2">Thu</div><div class="py-2">Fri</div>`;
-      const title=document.createElement('div');
-      title.className='text-center text-lg font-medium my-1';
-      title.textContent=month.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+      const block = document.createElement('section'); block.className = 'space-y-1';
 
-      const grid=document.createElement('div'); grid.className='grid grid-cols-5 gap-2';
-      const todayK=toKey(new Date());
+      const wdays = document.createElement('div');
+      wdays.className = 'grid grid-cols-5 text-center text-xs font-semibold text-slate-500';
+      wdays.innerHTML = `<div class="py-2">Mon</div><div class="py-2">Tue</div><div class="py-2">Wed</div><div class="py-2">Thu</div><div class="py-2">Fri</div>`;
+      const title = document.createElement('div');
+      title.className = 'text-center text-lg font-medium my-1';
+      title.textContent = month.toLocaleDateString(undefined,{ month:'long', year:'numeric' });
+
+      const grid = document.createElement('div'); grid.className = 'grid grid-cols-5 gap-2';
+
+      const todayK = toKey(new Date());
       days.forEach(d=>{
-        const k=toKey(d), inMonth=d.getMonth()===month.getMonth(), isToday=k===todayK, isHoliday=isHolidayKey(k);
-        const div=document.createElement('div');
-        div.id='cell_'+k;
-        div.className=[
+        const k = toKey(d), inMonth = d.getMonth()===month.getMonth(), isToday = k===todayK, isHoliday = isHolidayKey(k);
+        const div = document.createElement('div');
+        div.id = 'cell_'+k;
+        div.className = [
           'rounded-2xl border p-2 min-h-[130px] flex flex-col gap-2 bg-white',
-          !inMonth?'opacity-60':'', isToday?'ring-2 ring-slate-900':'', isHoliday?'holiday':''
+          !inMonth? 'opacity-60':'',
+          isToday? 'ring-2 ring-slate-900':'',
+          isHoliday? 'holiday':''
         ].join(' ');
-        div.dataset.dayKey=k;
-        div.innerHTML=`
+        div.dataset.dayKey = k;
+        div.innerHTML = `
           <div class="flex items-center justify-between gap-2">
             <div class="text-sm font-medium flex items-center gap-2">
               <span>${d.getDate()}</span>
-              ${isHoliday?`<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 border text-slate-700">${esc(HOLIDAYS[k]||'Holiday')}</span>`:''}
+              ${isHoliday ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 border text-slate-700">${esc(HOLIDAYS[k]||'Holiday')}</span>` : ''}
             </div>
             <div id="badges_${k}" class="flex items-center gap-1"></div>
           </div>
@@ -609,16 +694,16 @@
         `;
 
         // DnD (admin)
-        div.addEventListener('dragover',(e)=>{ if(!adminOK) return; e.preventDefault(); div.classList.add('droptarget'); });
-        div.addEventListener('dragleave',()=> div.classList.remove('droptarget'));
-        div.addEventListener('drop',async(e)=>{
+        div.addEventListener('dragover', (e)=>{ if(!adminOK) return; e.preventDefault(); div.classList.add('droptarget'); });
+        div.addEventListener('dragleave', ()=> div.classList.remove('droptarget'));
+        div.addEventListener('drop', async (e)=>{
           if(!adminOK) return; e.preventDefault(); div.classList.remove('droptarget');
-          const whoId=e.dataTransfer.getData('text/plain'); if(!whoId) return;
-          const cur=(daysMap[k]?.assignees)||[];
+          const whoId = e.dataTransfer.getData('text/plain'); if(!whoId) return;
+          const cur = (daysMap[k]?.assignees)||[];
           if(!cur.includes(whoId)){
-            daysMap[k]=daysMap[k]||{date:k,assignees:[],swapRequestedIds:[],note:'',checklist:{}};
-            daysMap[k].assignees=[...cur,whoId]; paintCell(k);
-            try{ await setAssignees(k,daysMap[k].assignees); }catch(err){ alert('Save failed'); console.error(err); }
+            daysMap[k] = daysMap[k]||{ date:k, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+            daysMap[k].assignees = [...cur, whoId]; paintCell(k);
+            try{ await setAssignees(k, daysMap[k].assignees); }catch(err){ alert('Save failed'); console.error(err); }
           }
         });
 
@@ -630,108 +715,127 @@
     }
 
     function renderCalendar(){
-      const calWrap=$('#calWrap'); calWrap.innerHTML='';
-      const endMonth=new Date(cursor.getFullYear(), cursor.getMonth()+spanMonths-1, 1);
+      const calWrap = $('#calWrap'); calWrap.innerHTML='';
+      const endMonth = new Date(cursor.getFullYear(), cursor.getMonth()+spanMonths-1, 1);
       $('#monthTitle').textContent = `${cursor.toLocaleDateString(undefined,{ month:'long', year:'numeric' })} → ${endMonth.toLocaleDateString(undefined,{ month:'long', year:'numeric' })}`;
-      for(let i=0;i<spanMonths;i++){ calWrap.appendChild(renderMonthBlock(new Date(cursor.getFullYear(), cursor.getMonth()+i, 1))); }
+      for(let i=0;i<spanMonths;i++){
+        calWrap.appendChild(renderMonthBlock(new Date(cursor.getFullYear(), cursor.getMonth()+i, 1)));
+      }
       paintAll();
     }
 
-    function chip(name,whoId,dayKey){
+    function chip(name, whoId, dayKey){
       const span=document.createElement('span');
-      const mine=meId===whoId;
-      const needSwap=daysMap[dayKey]?.swapRequestedIds?.includes(whoId);
-      span.className='group inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs '+(needSwap?'bg-amber-100 border-amber-300 text-amber-900':'bg-slate-50');
-      span.textContent=name;
+      const mine = meId===whoId;
+      const needSwap = daysMap[dayKey]?.swapRequestedIds?.includes(whoId);
+      span.className = 'group inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ' + (needSwap? 'bg-amber-100 border-amber-300 text-amber-900':'bg-slate-50');
+      span.textContent = name;
 
+      // toggle swap (only self)
       span.addEventListener('click', async (e)=>{
         e.stopPropagation(); if(!mine) return;
-        const set=new Set(daysMap[dayKey]?.swapRequestedIds||[]);
+        const set = new Set(daysMap[dayKey]?.swapRequestedIds||[]);
         if(set.has(whoId)) set.delete(whoId); else set.add(whoId);
-        daysMap[dayKey].swapRequestedIds=[...set]; paintCell(dayKey);
-        try{ await toggleSwap(dayKey,whoId); }catch(err){ console.error(err); alert('Failed'); }
+        daysMap[dayKey].swapRequestedIds = [...set]; paintCell(dayKey);
+        try{ await toggleSwap(dayKey, whoId); }catch(err){ console.error(err); alert('Failed'); }
       });
 
+      // remove (admin)
       if(adminOK){
         const x=document.createElement('button'); x.textContent='×'; x.title='Remove from day'; x.className='ml-1 opacity-50 hover:opacity-100';
         x.addEventListener('click', async (e)=>{
           e.stopPropagation(); if(!adminOK) return;
           const cur=(daysMap[dayKey]?.assignees)||[];
-          const next=cur.filter(id=>id!==whoId);
-          daysMap[dayKey].assignees=next;
-          const newSwaps=(daysMap[dayKey].swapRequestedIds||[]).filter(x=>x!==whoId);
-          daysMap[dayKey].swapRequestedIds=newSwaps; paintCell(dayKey);
-          try{ await setAssignees(dayKey,next); }catch(e){ console.error(e); alert('Failed'); }
+          const next = cur.filter(id=>id!==whoId);
+          daysMap[dayKey].assignees = next;
+          const newSwaps = (daysMap[dayKey].swapRequestedIds||[]).filter(x=> x!==whoId);
+          daysMap[dayKey].swapRequestedIds = newSwaps;
+          paintCell(dayKey);
+          try{ await setAssignees(dayKey, next); }catch(e){ console.error(e); alert('Failed'); }
         });
         span.appendChild(x);
       }
+
       return span;
     }
 
     function hasAnyAssigned(teamId){
       if(!teamId) return false;
-      const [a,b]=rangeKeyBounds(cursor,spanMonths);
-      let cur=fromKey(a), end=fromKey(b);
+      const [a,b] = rangeKeyBounds(cursor, spanMonths);
+      let cur = fromKey(a), end = fromKey(b);
       while(cur<=end){
-        const k=toKey(cur), d=daysMap[k];
+        const k=toKey(cur);
+        const d=daysMap[k];
         if(d && Array.isArray(d.assignees) && d.assignees.includes(teamId)) return true;
-        cur=addDays(cur,1);
+        cur = addDays(cur,1);
       }
       return false;
     }
 
     function paintCell(k){
-      const d=daysMap[k] || { assignees:[], swapRequestedIds:[], note:'', checklist:{} };
-      const chipsEl=$('#chips_'+k), badgesEl=$('#badges_'+k), actionsEl=$('#actions_'+k), cell=$('#cell_'+k);
+      const d = daysMap[k] || { assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+      const chipsEl = $('#chips_'+k);
+      const badgesEl = $('#badges_'+k);
+      const actionsEl = $('#actions_'+k);
+      const cell = $('#cell_'+k);
       if(!chipsEl||!actionsEl||!cell) return;
 
       chipsEl.innerHTML='';
-      (d.assignees||[]).forEach(id=> chipsEl.appendChild(chip(nameById(id)||id,id,k)));
+      (d.assignees||[]).forEach(id=>{ const nm = nameById(id)||id; chipsEl.appendChild(chip(nm,id,k)); });
 
+      // badges
       badgesEl.innerHTML='';
-      const swapCount=(d.swapRequestedIds||[]).length;
-      if(swapCount>0){ const b=document.createElement('span'); b.className='inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-800'; b.textContent='swap ×'+swapCount; badgesEl.appendChild(b); }
+      const swapCount = (d.swapRequestedIds||[]).length;
+      if(swapCount>0){ const b = document.createElement('span'); b.className='inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-800'; b.textContent = 'swap ×'+swapCount; badgesEl.appendChild(b); }
 
+      // actions
       actionsEl.innerHTML='';
-      const mine=meId && (d.assignees||[]).includes(meId);
-      const iHaveAny=hasAnyAssigned(meId);
+      const mine = meId && (d.assignees||[]).includes(meId);
+      const iHaveAny = hasAnyAssigned(meId);
 
       if(mine){
-        const btnSwap=document.createElement('button'); btnSwap.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50';
-        btnSwap.textContent=(d.swapRequestedIds||[]).includes(meId)?'Cancel swap':'Need swap';
-        btnSwap.onclick=()=>{ const fakeChip=chip('x',meId,k); fakeChip.click(); };
+        const btnSwap = document.createElement('button'); btnSwap.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50';
+        btnSwap.textContent = (d.swapRequestedIds||[]).includes(meId)? 'Cancel swap':'Need swap';
+        btnSwap.onclick = ()=>{ const fakeChip = chip('x', meId, k); fakeChip.click(); };
         actionsEl.append(btnSwap);
       } else if((d.swapRequestedIds||[]).length>0 && meId){
-        const giver=d.swapRequestedIds[0];
-        const btnCover=document.createElement('button'); btnCover.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50'; btnCover.textContent='Cover today';
-        btnCover.onclick=async()=>{
-          const nextAssignees=(d.assignees||[]).map(x=> x===giver? meId : x);
-          const nextSwaps=(d.swapRequestedIds||[]).filter(x=> x!==giver);
-          daysMap[k].assignees=nextAssignees; daysMap[k].swapRequestedIds=nextSwaps; paintCell(k);
+        const giver = d.swapRequestedIds[0];
+        const btnCover = document.createElement('button'); btnCover.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50'; btnCover.textContent='Cover today';
+        btnCover.onclick = async ()=>{
+          const nextAssignees = (d.assignees||[]).map(x=> x===giver? meId : x);
+          const nextSwaps = (d.swapRequestedIds||[]).filter(x=> x!==giver);
+          daysMap[k].assignees = nextAssignees; daysMap[k].swapRequestedIds = nextSwaps; paintCell(k);
           try{
             await ensureAnon();
-            await setAssignees(k,nextAssignees);
-            await updateDoc(doc(db,'days',k),{ swapRequestedIds:nextSwaps, updatedAt:serverTimestamp() });
+            await setAssignees(k, nextAssignees);
+            await updateDoc(doc(db,'days',k), { swapRequestedIds: nextSwaps, updatedAt: serverTimestamp() });
             await addSystemMsg(`🔁 ${nameById(meId)||'Someone'} covers ${nameById(giver)||giver} on ${k}.`, {type:'swap_accept', date:k, from:giver, to:meId}, meId);
           }catch(e){ console.error(e); alert('Failed to take shift'); }
         };
         actionsEl.append(btnCover);
 
         if(iHaveAny){
-          const btnEx=document.createElement('button'); btnEx.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50'; btnEx.textContent='Propose exchange…';
-          btnEx.onclick=()=>{
+          const btnEx = document.createElement('button'); btnEx.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50'; btnEx.textContent='Propose exchange…';
+          btnEx.onclick = async ()=>{
             showDateModal({
-              title:'Choose your date to swap', mode:'simple', fromId:meId, toId:giver,
+              title: 'Choose your date to swap',
+              mode: 'simple',
+              fromId: meId,
+              toId: giver,
               onSelect: async (alt)=>{
-                const dd=daysMap[alt];
+                const dd = daysMap[alt];
                 if(!dd || !(dd.assignees||[]).includes(meId)){ alert('You are not assigned on that date.'); return; }
                 try{
-                  await ensureAnon(); const u=auth.currentUser;
-                  await addDoc(collection(db,'messages'),{
+                  await ensureAnon();
+                  const u = auth.currentUser;
+                  await addDoc(collection(db,'messages'), {
                     text:`🔁 Swap offer: ${nameById(meId)||'Someone'} proposes exchange ${k} ⇄ ${alt}`,
-                    createdAt:serverTimestamp(), createdAtMs:Date.now(),
-                    authorId:u?.uid||'anon', authorName:nameById(meId)||'Anon',
-                    kind:'swap_offer', meta:{ from:meId, to:giver, date:k, askDate:alt }, visibleTeamIds:[meId,giver]
+                    createdAt: serverTimestamp(), createdAtMs: Date.now(),
+                    authorId: u?.uid||'anon',
+                    authorName: nameById(meId)||'Anon',
+                    kind:'swap_offer',
+                    meta:{ from: meId, to: giver, date: k, askDate: alt },
+                    visibleTeamIds:[meId, giver]
                   });
                 }catch(e){ console.error(e); alert('Failed to send offer'); }
               }
@@ -741,150 +845,182 @@
         }
       }
 
-      const showSwapOnly=$('#toggleSwap').checked;
-      cell.style.display = showSwapOnly ? (swapCount>0?'':'none') : '';
+      const showSwapOnly = $('#toggleSwap').checked;
+      if(showSwapOnly){ cell.style.display = swapCount>0 ? '' : 'none'; }
+      else { cell.style.display=''; }
     }
 
     function paintAll(){
-      const [a,b]=rangeKeyBounds(cursor,spanMonths);
-      let cur=fromKey(a), end=fromKey(b);
-      while(cur<=end){ const dow=(cur.getDay()+6)%7; if(dow<5){ paintCell(toKey(cur)); } cur=addDays(cur,1); }
+      const [a,b] = rangeKeyBounds(cursor, spanMonths);
+      let cur = fromKey(a); const end = fromKey(b);
+      while(cur <= end){ const dow=(cur.getDay()+6)%7; if(dow<5){ paintCell(toKey(cur)); } cur = addDays(cur,1); }
     }
 
     /******** 9) Toolbar ********/
-    $('#prevMonth').addEventListener('click',()=>{ cursor=new Date(cursor.getFullYear(),cursor.getMonth()-1,1); renderCalendar(); subscribeRange(); });
-    $('#nextMonth').addEventListener('click',()=>{ cursor=new Date(cursor.getFullYear(),cursor.getMonth()+1,1); renderCalendar(); subscribeRange(); });
-    $('#toggleSwap').addEventListener('change',paintAll);
-    $('#spanSelect').addEventListener('change',(e)=>{ spanMonths=parseInt(e.target.value||'1',10); renderCalendar(); subscribeRange(); });
+    $('#prevMonth').addEventListener('click', ()=>{ cursor = new Date(cursor.getFullYear(), cursor.getMonth()-1, 1); renderCalendar(); subscribeRange(); });
+    $('#nextMonth').addEventListener('click', ()=>{ cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1); renderCalendar(); subscribeRange(); });
+    $('#toggleSwap').addEventListener('change', paintAll);
+    $('#spanSelect').addEventListener('change', (e)=>{ spanMonths = parseInt(e.target.value||'1',10); renderCalendar(); subscribeRange(); });
 
-    $('#btnExportCSV').addEventListener('click',()=>{
-      const rows=[[ 'Date','Assignees','SwapNeeded' ]];
-      const ymStart=`${cursor.getFullYear()}-${('0'+(cursor.getMonth()+1)).slice(-2)}`;
-      const end=new Date(cursor.getFullYear(),cursor.getMonth()+spanMonths,0);
-      const ymEnd=`${end.getFullYear()}-${('0'+(end.getMonth()+1)).slice(-2)}`;
+    $('#btnExportCSV').addEventListener('click', ()=>{
+      const rows = [[ 'Date','Assignees','SwapNeeded' ]];
+      const ymStart = `${cursor.getFullYear()}-${('0'+(cursor.getMonth()+1)).slice(-2)}`;
+      const end = new Date(cursor.getFullYear(), cursor.getMonth()+spanMonths, 0);
+      const ymEnd = `${end.getFullYear()}-${('0'+(end.getMonth()+1)).slice(-2)}`;
       Object.values(daysMap).filter(Boolean).forEach(d=>{
         if(!d.date) return;
-        if(d.date>=ymStart && d.date<=ymEnd){
+        if(d.date >= ymStart && d.date <= ymEnd){
           rows.push([ d.date, (d.assignees||[]).map(nameById).filter(Boolean).join(' / '), (d.swapRequestedIds||[]).map(nameById).filter(Boolean).join(' / ') ]);
         }
       });
-      const csv=rows.map(r=>r.join(',')).join('\n');
-      const blob=new Blob([csv],{type:'text/csv'});
-      const url=URL.createObjectURL(blob);
+      const csv = rows.map(r=>r.join(',')).join('\n');
+      const blob = new Blob([csv],{type:'text/csv'});
+      const url = URL.createObjectURL(blob);
       const a=document.createElement('a'); a.href=url; a.download='rota-'+ymStart+'__'+ymEnd+'.csv'; a.click(); URL.revokeObjectURL(url);
     });
-    $('#btnPrint').addEventListener('click',()=> window.print());
+    $('#btnPrint').addEventListener('click', ()=> window.print());
+
+    // Publish: disabled пока поле пустое
+    const msgInput = $('#msgText');
+    const publishBtn = $('#btnPublish');
+    const togglePublishBtn = ()=>{ publishBtn.disabled = (msgInput.value.trim().length === 0); };
+    msgInput.addEventListener('input', togglePublishBtn);
+    togglePublishBtn();
 
     $('#btnPublish').addEventListener('click', async ()=>{
       await ensureAnon();
-      const text=$('#msgText').value.trim(); if(!text) return alert('Empty');
-      const u=auth.currentUser;
+      const text = $('#msgText').value.trim(); if(!text) return;
+      const u = auth.currentUser;
       try{
-        await addDoc(collection(db,'messages'),{
-          text,attachments:[],createdAt:serverTimestamp(),createdAtMs:Date.now(),resolvedAt:null,
-          authorId:u?.uid||'anon',authorName:nameById(meId)||'Anon', kind:'user', meta:{}
+        await addDoc(collection(db,'messages'), {
+          text, attachments: [], createdAt: serverTimestamp(), createdAtMs: Date.now(), resolvedAt: null,
+          authorId: u?.uid||'anon', authorName: nameById(meId)||'Anon',
+          kind:'user', meta:{}
         });
         $('#msgText').value='';
+        togglePublishBtn();
       }catch(e){ console.error(e); alert('Failed to publish'); }
     });
 
     /******** 10) Checklist ********/
     function renderChecklist(){
-      const k=toKey(new Date());
-      const d=daysMap[k] || { checklist:{}, assignees:[], doneAt:null };
-      const assigned=d.assignees||[];
-      const isMine=meId && assigned.includes(meId);
-      const area=$('#checklist'); area.innerHTML='';
-      const info=$('#checklistInfo');
+      const k = toKey(new Date());
+      const d = daysMap[k] || { checklist:{}, assignees:[], doneAt:null };
+      const assigned = d.assignees||[];
+      const isMine = meId && assigned.includes(meId);
+      const area = $('#checklist'); area.innerHTML='';
+      const info = $('#checklistInfo');
+
+      const allChecked = (dd)=> CHECKITEMS.every(it => dd.checklist && dd.checklist[it.id]);
 
       if(d.doneAt){
         $('#btnDone').classList.add('hidden');
-        info.innerHTML=`🎉 Checklist completed for ${k}. Thank you!`;
+        info.innerHTML = `🎉 Checklist completed for ${k}. Thank you!`;
         return;
       }
 
       if(isMine){
-        info.textContent=`You are on duty today (${assigned.map(nameById).filter(Boolean).join(' / ')})`;
+        info.textContent = `You are on duty today (${assigned.map(nameById).filter(Boolean).join(' / ')})`;
         CHECKITEMS.forEach(it=>{
           const row=document.createElement('label'); row.className='flex items-center gap-2 text-sm';
           const cb=document.createElement('input'); cb.type='checkbox'; cb.className='rounded'; cb.checked=!!d.checklist?.[it.id];
           cb.addEventListener('change', async ()=>{
-            const cc={ ...(daysMap[k]?.checklist||{}) }; cc[it.id]=cb.checked ? (meId||true) : null;
-            try{ await saveChecklist(k,cc); }catch(e){ console.error(e); alert('Failed to save'); }
+            const cc = { ...(daysMap[k]?.checklist||{}) }; cc[it.id] = cb.checked ? (meId||true) : null;
+            try{ await saveChecklist(k, cc); }catch(e){ console.error(e); alert('Failed to save'); }
+            // обновить кнопку
+            const local = daysMap[k] || { checklist:{} }; local.checklist = cc; daysMap[k] = local;
+            updateDoneBtn();
           });
           row.append(cb, document.createTextNode(it.label));
           area.appendChild(row);
         });
+        const doneBtn = $('#btnDone');
+        const updateDoneBtn = ()=>{
+          const dd = daysMap[k] || d;
+          doneBtn.disabled = !allChecked(dd);
+          doneBtn.classList.toggle('btn-disabled', doneBtn.disabled);
+        };
+        updateDoneBtn();
         $('#btnDone').classList.remove('hidden');
       }else{
-        info.textContent=`Duty today: ${assigned.map(nameById).filter(Boolean).join(' / ') || '—'}`;
+        info.textContent = `Duty today: ${assigned.map(nameById).filter(Boolean).join(' / ') || '—'}`;
         $('#btnDone').classList.add('hidden');
       }
     }
 
     $('#btnDone').addEventListener('click', async ()=>{
-      const k=toKey(new Date());
-      const d=daysMap[k] || { assignees:[], checklist:{} };
-      const assigned=d.assignees||[];
-      const isMine=meId && assigned.includes(meId);
+      const k = toKey(new Date());
+      const d = daysMap[k] || { assignees:[], checklist:{} };
+      const assigned = d.assignees||[];
+      const isMine = meId && assigned.includes(meId);
+
+      const allOk = CHECKITEMS.every(it => (daysMap[k]?.checklist) && daysMap[k].checklist[it.id]);
+      if(!allOk){ alert('Please complete all checklist items.'); return; }
+
       try{
         await markDone(k);
-        const allOk=CHECKITEMS.every(it => (daysMap[k]?.checklist) && daysMap[k].checklist[it.id]);
-        if(allOk && isMine){
-          await addSystemMsg(`✅ Supplies checklist completed for ${k}. Great job! 🎉🌈`, { type:'checklist_done', date:k }, meId);
-        }
-        daysMap[k]={ ...(daysMap[k]||{}), doneAt:new Date() };
+        daysMap[k] = { ...(daysMap[k]||{}), doneAt: new Date() };
+        await addSystemMsg(`✅ Supplies checklist completed for ${k}.`, { type:'checklist_done', date:k }, meId);
         renderChecklist();
       }catch(e){ console.error(e); alert('Failed to mark done'); }
     });
 
-    /******** 11) Modal ********/
-    const dateModal=$('#dateModal');
-    const dmTitle=$('#dm_title'), dmList=$('#dm_list'), dmHint=$('#dm_hint');
-    const dmClose=$('#dm_close'), dmCancel=$('#dm_cancel'), dmOK=$('#dm_ok');
-    const dmTabs=$('#dm_tabs'), dmTabMy=$('#dm_tab_my'), dmTabTheir=$('#dm_tab_their');
+    /******** 11) Modal: date picker ********/
+    const dateModal = $('#dateModal');
+    const dmTitle = $('#dm_title');
+    const dmList = $('#dm_list');
+    const dmHint = $('#dm_hint');
+    const dmClose = $('#dm_close');
+    const dmCancel = $('#dm_cancel');
+    const dmOK = $('#dm_ok');
+    const dmTabs = $('#dm_tabs');
+    const dmTabMy = $('#dm_tab_my');
+    const dmTabTheir = $('#dm_tab_their');
 
-    let dmState={ mode:'simple', fromId:null, toId:null, pickFrom:'mine', selected:null, onSelect:null };
+    let dmState = { mode:'simple', fromId:null, toId:null, pickFrom:'mine', selected:null, onSelect:null };
 
     function showDateModal({ title, mode='simple', fromId, toId, onSelect }){
-      dmState={ mode, fromId, toId, pickFrom:'mine', selected:null, onSelect };
-      dmTitle.textContent=title||'Choose a date';
-      dmOK.disabled=true;
-      dmTabs.classList.toggle('hidden', mode!=='counter');
+      dmState = { mode, fromId, toId, pickFrom:'mine', selected:null, onSelect };
+      dmTitle.textContent = title || 'Choose a date';
+      dmOK.disabled = true;
+      dmTabs.classList.toggle('hidden', mode !== 'counter');
       dmTabMy.classList.add('bg-slate-900','text-white');
       dmTabTheir.classList.remove('bg-slate-900','text-white');
       renderModalList();
       dateModal.classList.remove('hidden');
     }
-    function hideDateModal(){ dateModal.classList.add('hidden'); dmState={ mode:'simple', fromId:null, toId:null, pickFrom:'mine', selected:null, onSelect:null }; }
-    dmClose.onclick=hideDateModal; dmCancel.onclick=hideDateModal;
-    dmTabMy.onclick=()=>{ dmState.pickFrom='mine'; dmTabMy.classList.add('bg-slate-900','text-white'); dmTabTheir.classList.remove('bg-slate-900','text-white'); renderModalList(); };
-    dmTabTheir.onclick=()=>{ dmState.pickFrom='their'; dmTabTheir.classList.add('bg-slate-900','text-white'); dmTabMy.classList.remove('bg-slate-900','text-white'); renderModalList(); };
-    dmOK.onclick=()=>{ if(!dmState.selected||!dmState.onSelect) return; dmState.onSelect(dmState.selected); hideDateModal(); };
+    function hideDateModal(){ dateModal.classList.add('hidden'); dmState = { mode:'simple', fromId:null, toId:null, pickFrom:'mine', selected:null, onSelect:null }; }
+    dmClose.onclick = hideDateModal; dmCancel.onclick = hideDateModal;
+    dmTabMy.onclick = ()=>{ dmState.pickFrom='mine'; dmTabMy.classList.add('bg-slate-900','text-white'); dmTabTheir.classList.remove('bg-slate-900','text-white'); renderModalList(); };
+    dmTabTheir.onclick = ()=>{ dmState.pickFrom='their'; dmTabTheir.classList.add('bg-slate-900','text-white'); dmTabMy.classList.remove('bg-slate-900','text-white'); renderModalList(); };
+    dmOK.onclick = ()=>{ if(!dmState.selected || !dmState.onSelect) return; dmState.onSelect(dmState.selected); hideDateModal(); };
 
     function datesFor(teamId){
       const out=[]; if(!teamId) return out;
-      const [a,b]=rangeKeyBounds(cursor,spanMonths);
-      let cur=fromKey(a), end=fromKey(b);
+      const [a,b] = rangeKeyBounds(cursor, spanMonths);
+      let cur = fromKey(a), end = fromKey(b);
       while(cur<=end){
-        const k=toKey(cur), d=daysMap[k];
+        const k = toKey(cur);
+        const d=daysMap[k];
         if(d && Array.isArray(d.assignees) && d.assignees.includes(teamId)) out.push(k);
-        cur=addDays(cur,1);
+        cur = addDays(cur,1);
       }
       return out.sort();
     }
 
     function renderModalList(){
-      dmList.innerHTML=''; dmHint.textContent=''; dmOK.disabled=true; dmState.selected=null;
-      const label=dmState.mode==='counter'
-        ? (dmState.pickFrom==='mine'?'Your assigned dates':`${nameById(dmState.toId)||'Their'} assigned dates`)
+      dmList.innerHTML = ''; dmHint.textContent = ''; dmOK.disabled = true; dmState.selected = null;
+      const label = dmState.mode==='counter'
+        ? (dmState.pickFrom==='mine' ? 'Your assigned dates' : `${nameById(dmState.toId)||'Their'} assigned dates`)
         : 'Your assigned dates';
-      const ds=dmState.pickFrom==='mine' ? datesFor(meId) : datesFor(dmState.toId);
+
+      const ds = dmState.pickFrom==='mine' ? datesFor(meId) : datesFor(dmState.toId);
       if(ds.length===0){ const p=document.createElement('p'); p.className='text-sm text-slate-500'; p.textContent='No assigned dates in the loaded range.'; dmList.appendChild(p); return; }
-      dmHint.textContent=label;
+      dmHint.textContent = label;
+
       ds.forEach(k=>{
-        const row=document.createElement('button'); row.type='button'; row.className='w-full text-left px-3 py-2 rounded-lg border hover:bg-slate-50'; row.textContent=k;
-        row.onclick=()=>{ $$('#dm_list button').forEach(b=> b.classList.remove('ring-2','ring-slate-900')); row.classList.add('ring-2','ring-slate-900'); dmState.selected=k; dmOK.disabled=false; };
+        const row=document.createElement('button'); row.type='button'; row.className='w-full text-left px-3 py-2 rounded-lg border hover:bg-slate-50'; row.textContent = k;
+        row.onclick = ()=>{ $$('#dm_list button').forEach(b=> b.classList.remove('ring-2','ring-slate-900')); row.classList.add('ring-2','ring-slate-900'); dmState.selected = k; dmOK.disabled = false; };
         dmList.appendChild(row);
       });
     }
@@ -892,10 +1028,8 @@
     /******** 12) Boot ********/
     onAuthStateChanged(auth, async (u)=>{
       if(!u){ await signInAnonymously(auth); return; }
-      await saveMyProfileTeam(false);   // профиль гарантирован на сервере
-      if(profileUnsub){ try{profileUnsub();}catch(_){}}  // слушать профиль и на изменения пересобирать подписки
-      profileUnsub = onSnapshot(doc(db,'profiles',u.uid), ()=> resubscribeMessages());
-
+      await saveMyProfileTeam(false);  // профиль на сервере ДО подписок
+      subscribeProfile();
       subscribeRange();
       resubscribeMessages();
       renderHeader();
