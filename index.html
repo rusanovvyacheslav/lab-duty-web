@@ -105,10 +105,10 @@
   </main>
 
   <footer class="max-w-6xl mx-auto px-4 py-8 text-xs text-slate-500">
-    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v5.1
+    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v5.2
   </footer>
 
-  <!-- MODAL: choose a date -->
+  <!-- MODAL -->
   <div id="dateModal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
@@ -150,32 +150,11 @@
     ];
     const ADMIN_ID = 'admin';
     const ADMIN_LABEL = 'Administrator';
-    const ADMIN_CODE = 'admin-code-CHANGE-ME'; // ← УСТАНОВИТЕ СВОЙ КОД
+    const ADMIN_CODE = 'admin-code-CHANGE-ME'; // ← ЗАМЕНИ
 
-    // Праздники (пример FR 2025–2026)
     const HOLIDAYS = {
-      '2025-01-01':'New Year',
-      '2025-04-21':'Easter Monday',
-      '2025-05-01':'Labour Day',
-      '2025-05-08':'Victory in Europe Day',
-      '2025-05-29':'Ascension Day',
-      '2025-06-09':'Whit Monday',
-      '2025-07-14':'Bastille Day',
-      '2025-08-15':'Assumption',
-      '2025-11-01':'All Saints’ Day',
-      '2025-11-11':'Armistice Day',
-      '2025-12-25':'Christmas',
-      '2026-01-01':'New Year',
-      '2026-04-06':'Easter Monday',
-      '2026-05-01':'Labour Day',
-      '2026-05-08':'Victory in Europe Day',
-      '2026-05-14':'Ascension Day',
-      '2026-05-25':'Whit Monday',
-      '2026-07-14':'Bastille Day',
-      '2026-08-15':'Assumption',
-      '2026-11-01':'All Saints’ Day',
-      '2026-11-11':'Armistice Day',
-      '2026-12-25':'Christmas'
+      '2025-01-01':'New Year','2025-04-21':'Easter Monday','2025-05-01':'Labour Day','2025-05-08':'Victory in Europe Day','2025-05-29':'Ascension Day','2025-06-09':'Whit Monday','2025-07-14':'Bastille Day','2025-08-15':'Assumption','2025-11-01':'All Saints’ Day','2025-11-11':'Armistice Day','2025-12-25':'Christmas',
+      '2026-01-01':'New Year','2026-04-06':'Easter Monday','2026-05-01':'Labour Day','2026-05-08':'Victory in Europe Day','2026-05-14':'Ascension Day','2026-05-25':'Whit Monday','2026-07-14':'Bastille Day','2026-08-15':'Assumption','2026-11-01':'All Saints’ Day','2026-11-11':'Armistice Day','2026-12-25':'Christmas'
     };
 
     const FIREBASE_CONFIG = {
@@ -201,7 +180,11 @@
     /******** 1) Firebase ********/
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
     import { getAuth, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, query, where, orderBy, serverTimestamp, addDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import {
+      getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, query, where, orderBy,
+      serverTimestamp, addDoc, waitForPendingWrites
+    } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
     const app = initializeApp(FIREBASE_CONFIG);
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -244,11 +227,16 @@
     async function saveMyProfileTeam(isAdminOverride=null){
       await ensureAnon();
       const u = auth.currentUser; if(!u) return;
+      const pref = doc(db,'profiles', u.uid);
       const data = {};
       if(meId) data.teamId = meId;
       if(isAdminOverride !== null) data.isAdmin = !!isAdminOverride;
-      // ВСЕГДА создаём/обновляем документ (даже если пустой) — чтобы myProfileExists() в правилах был true
-      await setDoc(doc(db,'profiles', u.uid), data, { merge:true });
+
+      await setDoc(pref, data, { merge:true });
+      // КРИТИЧЕСКО: ждём подтверждения сервером
+      await waitForPendingWrites(db);
+      // Доп. страховка: одно серверное чтение (если оффлайн/кэш — просто продолжим)
+      try { await getDoc(pref); } catch(_) {}
     }
 
     /******** 5) Identity/Admin UI ********/
@@ -269,7 +257,7 @@
         await saveMyProfileTeam(false);
       }
       renderHeader();
-      resubscribeMessages();   // переподписка после гарантированной записи профиля
+      resubscribeMessages();   // теперь профиль точно на сервере
       renderChecklist();
       paintAll();
     }
@@ -363,7 +351,6 @@
     }
 
     /******** 7) Messages ********/
-    // Подписка на профиль: при любом изменении — переподписать messages
     function subscribeProfile(){
       if(profileUnsub){ try{ profileUnsub(); }catch(_){} profileUnsub=null; }
       const u = auth.currentUser; if(!u) return;
@@ -374,7 +361,6 @@
 
     function resubscribeMessages(){
       if(messagesUnsub){ try{ messagesUnsub(); }catch(_){} messagesUnsub=null; }
-      // закрыть все подписки на комментарии для ранее отрисованных карточек
       Object.values(commentUnsubs).forEach(unsub => { try{ unsub(); }catch(_){} });
       for(const k in commentUnsubs) delete commentUnsubs[k];
 
@@ -383,7 +369,6 @@
         const items = [];
         qs.forEach(docSnap => { items.push({ id: docSnap.id, m: docSnap.data() }); });
 
-        // приватные обмены — только участникам или админу
         const filtered = items.filter(({m})=>{
           if(adminOK) return true;
           if(m.kind==='swap_offer' || m.kind==='swap_counter'){
@@ -462,7 +447,6 @@
 
           $('#feed').appendChild(card);
 
-          // comments subscribe
           const cq = collection(db,'messages', id, 'comments');
           const unsub = onSnapshot(cq, { includeMetadataChanges:true }, (cqs)=>{
             const arr=[]; cqs.forEach(cs=> arr.push(cs.data()));
@@ -893,7 +877,7 @@
       }catch(e){ console.error(e); alert('Failed to mark done'); }
     });
 
-    /******** 11) Modal: date picker ********/
+    /******** 11) Modal ********/
     const dateModal = $('#dateModal');
     const dmTitle = $('#dm_title');
     const dmList = $('#dm_list');
@@ -956,9 +940,9 @@
     /******** 12) Boot ********/
     onAuthStateChanged(auth, async (u)=>{
       if(!u){ await signInAnonymously(auth); return; }
-      // 1) гарантируем наличие профиля ДО любых подписок
+      // 1) профиль на сервере ДО всего остального
       await saveMyProfileTeam(false);
-      // 2) подписка на профиль — любые изменения профиля→пересобрать ленту
+      // 2) слушать профиль и на любые изменения — пересобирать ленту
       subscribeProfile();
       // 3) остальное
       subscribeRange();
