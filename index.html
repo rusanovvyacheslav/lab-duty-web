@@ -9,8 +9,6 @@
     .droptarget{ outline: 2px dashed rgba(100,116,139,0.5); outline-offset: -6px; }
     .holiday{ background-image: repeating-linear-gradient(45deg, rgba(100,116,139,.12) 0 10px, transparent 10px 20px); }
     @media print { .no-print{ display:none !important; } }
-
-    /* Подсветки сообщений */
     .msg-swap{ background:#eff6ff; }
     .msg-swap-admin{ background:#eff6ff; border-color:#2563eb; }
     .msg-congrats{
@@ -107,7 +105,7 @@
   </main>
 
   <footer class="max-w-6xl mx-auto px-4 py-8 text-xs text-slate-500">
-    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v5.0
+    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v5.1
   </footer>
 
   <!-- MODAL: choose a date -->
@@ -152,7 +150,7 @@
     ];
     const ADMIN_ID = 'admin';
     const ADMIN_LABEL = 'Administrator';
-    const ADMIN_CODE = 'admin-code-0'; // ← смените
+    const ADMIN_CODE = 'admin-code-CHANGE-ME'; // ← УСТАНОВИТЕ СВОЙ КОД
 
     // Праздники (пример FR 2025–2026)
     const HOLIDAYS = {
@@ -237,6 +235,7 @@
     const daysMap = {};
     let rangeUnsub = null;
     let messagesUnsub = null;
+    let profileUnsub = null;
     const commentUnsubs = {};
 
     async function ensureAnon(){ if(!auth.currentUser) await signInAnonymously(auth); }
@@ -248,22 +247,29 @@
       const data = {};
       if(meId) data.teamId = meId;
       if(isAdminOverride !== null) data.isAdmin = !!isAdminOverride;
-      if(Object.keys(data).length>0) await setDoc(doc(db,'profiles', u.uid), data, { merge:true });
+      // ВСЕГДА создаём/обновляем документ (даже если пустой) — чтобы myProfileExists() в правилах был true
+      await setDoc(doc(db,'profiles', u.uid), data, { merge:true });
     }
 
     /******** 5) Identity/Admin UI ********/
-    function setMe(id){
+    async function setMe(id){
       if(id===ADMIN_ID){
         const x = prompt('Enter admin code');
-        if(x===ADMIN_CODE){ adminOK=true; meId=null; localStorage.removeItem('labduty_meId'); saveMyProfileTeam(true); }
-        else { alert('Wrong code'); adminOK=false; meId=null; saveMyProfileTeam(false); }
+        if(x===ADMIN_CODE){
+          adminOK=true; meId=null; localStorage.removeItem('labduty_meId');
+          await saveMyProfileTeam(true);
+        }else{
+          alert('Wrong code');
+          adminOK=false; meId=null;
+          await saveMyProfileTeam(false);
+        }
       }else{
         meId=id||null; adminOK=false;
         if(meId) localStorage.setItem('labduty_meId',meId); else localStorage.removeItem('labduty_meId');
-        saveMyProfileTeam(false);
+        await saveMyProfileTeam(false);
       }
       renderHeader();
-      resubscribeMessages();   // ← переподписка после смены роли/участника
+      resubscribeMessages();   // переподписка после гарантированной записи профиля
       renderChecklist();
       paintAll();
     }
@@ -285,7 +291,13 @@
       paintAll();
     }
     $('#identitySelect').addEventListener('change', (e)=> setMe(e.target.value || null));
-    $('#btnAdminExit').addEventListener('click', ()=>{ adminOK=false; saveMyProfileTeam(false); renderHeader(); resubscribeMessages(); paintAll(); });
+    $('#btnAdminExit').addEventListener('click', async ()=>{
+      adminOK=false;
+      await saveMyProfileTeam(false);
+      renderHeader();
+      resubscribeMessages();
+      paintAll();
+    });
 
     function renderTeamChips(){
       const box = $('#teamChips'); box.innerHTML='';
@@ -350,15 +362,28 @@
       await setDoc(ref,{ ...base, doneAt: serverTimestamp(), updatedAt: serverTimestamp() });
     }
 
-    /******** 7) Messages (без orderBy, сортируем на клиенте) ********/
+    /******** 7) Messages ********/
+    // Подписка на профиль: при любом изменении — переподписать messages
+    function subscribeProfile(){
+      if(profileUnsub){ try{ profileUnsub(); }catch(_){} profileUnsub=null; }
+      const u = auth.currentUser; if(!u) return;
+      profileUnsub = onSnapshot(doc(db,'profiles',u.uid), ()=>{
+        resubscribeMessages();
+      });
+    }
+
     function resubscribeMessages(){
       if(messagesUnsub){ try{ messagesUnsub(); }catch(_){} messagesUnsub=null; }
+      // закрыть все подписки на комментарии для ранее отрисованных карточек
+      Object.values(commentUnsubs).forEach(unsub => { try{ unsub(); }catch(_){} });
+      for(const k in commentUnsubs) delete commentUnsubs[k];
+
       const col = collection(db,'messages');
       messagesUnsub = onSnapshot(col, { includeMetadataChanges:true }, (qs)=>{
         const items = [];
         qs.forEach(docSnap => { items.push({ id: docSnap.id, m: docSnap.data() }); });
 
-        // privacy: обмены скрываем дополнительно и на клиенте (правила тоже ограничат выдачу)
+        // приватные обмены — только участникам или админу
         const filtered = items.filter(({m})=>{
           if(adminOK) return true;
           if(m.kind==='swap_offer' || m.kind==='swap_counter'){
@@ -368,7 +393,6 @@
           return true;
         });
 
-        // сортировка по времени (локально)
         filtered.sort((a,b)=>{
           const ta = (a.m.createdAtMs??0) || (a.m.createdAt?.toMillis?.()||0);
           const tb = (b.m.createdAtMs??0) || (b.m.createdAt?.toMillis?.()||0);
@@ -438,7 +462,7 @@
 
           $('#feed').appendChild(card);
 
-          // comments subscribe (без orderBy; сортируем сами)
+          // comments subscribe
           const cq = collection(db,'messages', id, 'comments');
           const unsub = onSnapshot(cq, { includeMetadataChanges:true }, (cqs)=>{
             const arr=[]; cqs.forEach(cs=> arr.push(cs.data()));
@@ -932,7 +956,11 @@
     /******** 12) Boot ********/
     onAuthStateChanged(auth, async (u)=>{
       if(!u){ await signInAnonymously(auth); return; }
-      await saveMyProfileTeam(false);   // фиксируем teamId/isAdmin для правил
+      // 1) гарантируем наличие профиля ДО любых подписок
+      await saveMyProfileTeam(false);
+      // 2) подписка на профиль — любые изменения профиля→пересобрать ленту
+      subscribeProfile();
+      // 3) остальное
       subscribeRange();
       resubscribeMessages();
       renderHeader();
