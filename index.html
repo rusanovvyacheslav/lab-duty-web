@@ -14,7 +14,7 @@
     /* подсветки сообщений */
     .msg-swap{ background: #eff6ff; }            /* бледно-синий */
     .msg-swap-admin{ background:#eff6ff; border-color:#2563eb; } /* админу — синяя рамка */
-    .msg-congrats{ 
+    .msg-congrats{
       border:0 !important;
       background: linear-gradient(90deg,#ff9a9e,#fad0c4,#fbc2eb,#a1c4fd,#c2ffd8) !important;
       color:#111827 !important;
@@ -108,7 +108,7 @@
   </main>
 
   <footer class="max-w-6xl mx-auto px-4 py-8 text-xs text-slate-500">
-    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v4.2
+    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v4.3
   </footer>
 
   <!-- Modal overlay: date picker -->
@@ -157,7 +157,7 @@
     const ADMIN_LABEL = 'Administrator';
     const ADMIN_CODE = 'admin-code-0'; // change me
 
-    // Праздники (Франция, пример 2025–2026)
+    // Праздники (Франция, 2025–2026)
     const HOLIDAYS = {
       '2025-01-01':'New Year',
       '2025-04-21':'Easter Monday',
@@ -276,14 +276,14 @@
     async function ensureAnon(){ if(!auth.currentUser) await signInAnonymously(auth); }
 
     /**********************
-     * 4) Profiles (минимум, только для приватности и админа)
+     * 4) Mini-profile for rules
      * profiles/{uid} -> { teamId, isAdmin }
      **********************/
     async function saveMyProfileTeam(isAdminOverride=null){
       await ensureAnon();
       const u = auth.currentUser;
       if(!u) return;
-      const data = { };
+      const data = {};
       if(meId) data.teamId = meId;
       if(isAdminOverride !== null) data.isAdmin = !!isAdminOverride;
       if(Object.keys(data).length>0){
@@ -292,7 +292,7 @@
     }
 
     /**********************
-     * 5) Identity + Admin + Team chips
+     * 5) Identity/Admin UI
      **********************/
     function setMe(id){
       if(id===ADMIN_ID){
@@ -304,8 +304,11 @@
         if(meId) localStorage.setItem('labduty_meId',meId); else localStorage.removeItem('labduty_meId');
         saveMyProfileTeam(false);
       }
-      renderHeader(); paintAll(); renderChecklist();
-      resubscribeMessages();
+      renderHeader();
+      // Переподписки после смены роли/участника
+      resubscribeMessages(true);
+      renderChecklist();
+      paintAll();
     }
 
     function renderHeader(){
@@ -326,7 +329,7 @@
     }
 
     $('#identitySelect').addEventListener('change', (e)=> setMe(e.target.value || null));
-    $('#btnAdminExit').addEventListener('click', ()=>{ adminOK=false; saveMyProfileTeam(false); renderHeader(); paintAll(); resubscribeMessages(); });
+    $('#btnAdminExit').addEventListener('click', ()=>{ adminOK=false; saveMyProfileTeam(false); renderHeader(); resubscribeMessages(true); paintAll(); });
 
     function renderTeamChips(){
       const box = $('#teamChips'); box.innerHTML='';
@@ -340,7 +343,7 @@
     }
 
     /**********************
-     * 6) Firestore IO: days
+     * 6) Firestore: days
      **********************/
     function rangeKeyBounds(d, span){
       const [a,b] = monthBounds(d, span);
@@ -354,7 +357,7 @@
       rangeUnsub = onSnapshot(qy, (qs)=>{
         qs.forEach(docSnap=>{ const d = migrateDay(docSnap.data()); daysMap[docSnap.id] = d; });
         renderCalendar(); renderChecklist();
-      });
+      }, (err)=>{ console.error('days onSnapshot error', err); });
     }
 
     function migrateDay(d){
@@ -399,97 +402,125 @@
     /**********************
      * 7) Messages
      **********************/
-    function resubscribeMessages(){
-      if(messagesUnsub) messagesUnsub();
-      Object.values(commentUnsubs).forEach(u=>{ try{u();}catch(e){} });
-      for(const k in commentUnsubs) delete commentUnsubs[k];
+    function makeMessagesQuery(primary=true){
+      const col = collection(db,'messages');
+      if(primary){
+        // быстрый показ: по локальному миллисекундному времени
+        return query(col, orderBy('createdAtMs','desc'));
+      }else{
+        // запасной вариант
+        return query(col, orderBy('createdAt','desc'));
+      }
+    }
 
-      const qy = query(collection(db,'messages'), orderBy('createdAt','desc'));
-      messagesUnsub = onSnapshot(qy, (qs)=>{
-        const cutoff = Date.now() - 24*3600*1000;
-        const feed = $('#feed'); feed.innerHTML='';
-        qs.forEach(s=>{
-          const m = s.data(); const id = s.id;
+    function resubscribeMessages(force=false){
+      if(messagesUnsub){ messagesUnsub(); messagesUnsub = null; }
+      const attach = (primary=true)=>{
+        const qy = makeMessagesQuery(primary);
+        messagesUnsub = onSnapshot(qy, (qs)=>{
+          const cutoff = Date.now() - 24*3600*1000;
+          const feed = $('#feed'); feed.innerHTML='';
+          qs.forEach(s=>{
+            const m = s.data(); const id = s.id;
 
-          // приватность обменов: на клиенте тоже фильтруем (правила тоже ограничивают)
-          const isSwapKind = (m.kind==='swap_offer' || m.kind==='swap_counter');
-          if(isSwapKind && !adminOK){
-            const v = m.visibleTeamIds||[];
-            if(!(meId && v.includes(meId))) return;
-          }
+            // приватность обменов (клиентская, правила тоже фильтруют)
+            const isSwapKind = (m.kind==='swap_offer' || m.kind==='swap_counter');
+            if(isSwapKind && !adminOK){
+              const v = m.visibleTeamIds||[];
+              if(!(meId && v.includes(meId))) return;
+            }
 
-          const resolvedMs = m.resolvedAt?.toMillis ? m.resolvedAt.toMillis() : (m.resolvedAt? new Date(m.resolvedAt).getTime() : null);
-          const deletedMs = m.deletedAt?.toMillis ? m.deletedAt.toMillis() : (m.deletedAt? new Date(m.deletedAt).getTime() : null);
+            const resolvedMs = m.resolvedAt?.toMillis ? m.resolvedAt.toMillis() : (m.resolvedAt? new Date(m.resolvedAt).getTime() : null);
+            const deletedMs = m.deletedAt?.toMillis ? m.deletedAt.toMillis() : (m.deletedAt? new Date(m.deletedAt).getTime() : null);
 
-          if(!adminOK){
-            if(deletedMs) return;
-            if(resolvedMs && resolvedMs < cutoff) return;
-          }
+            if(!adminOK){
+              if(deletedMs) return;
+              if(resolvedMs && resolvedMs < cutoff) return;
+            }
 
-          const isSwap = isSwapKind || (m.kind==='system' && (m.meta?.type==='swap_accept' || m.meta?.type==='swap_done'));
-          const isCongrats = (m.kind==='system' && m.meta?.type==='checklist_done');
+            const isSwap = isSwapKind || (m.kind==='system' && (m.meta?.type==='swap_accept' || m.meta?.type==='swap_done'));
+            const isCongrats = (m.kind==='system' && m.meta?.type==='checklist_done');
 
-          const card = document.createElement('div');
-          card.className = 'rounded-xl border p-3 bg-white';
-          if(isSwap) card.className += adminOK ? ' msg-swap msg-swap-admin border' : ' msg-swap';
-          if(isCongrats) card.className = 'rounded-xl p-3 msg-congrats';
-          if(m.deletedAt) card.classList.add('opacity-60');
+            const card = document.createElement('div');
+            card.className = 'rounded-xl border p-3 bg-white';
+            if(isSwap) card.className += adminOK ? ' msg-swap msg-swap-admin border' : ' msg-swap';
+            if(isCongrats) card.className = 'rounded-xl p-3 msg-congrats';
+            if(m.deletedAt) card.classList.add('opacity-60');
 
-          const who = esc(m.authorName||'Anon');
-          const headerRight = [];
-          if(m.resolvedAt){ headerRight.push(`<span class='inline-flex items-center gap-1 px-1.5 py-0.5 rounded border'>Resolved: ${m.resolvedAt?.toDate? m.resolvedAt.toDate().toLocaleString():''}</span>`); }
-          if(m.deletedAt){ headerRight.push(`<span class='inline-flex items-center gap-1 px-1.5 py-0.5 rounded border'>Deleted: ${m.deletedAt?.toDate? m.deletedAt.toDate().toLocaleString():''}</span>`); }
-          headerRight.push(`<span>${m.createdAt?.toDate? m.createdAt.toDate().toLocaleString() : ''}</span>`);
+            const who = esc(m.authorName||'Anon');
+            const headerRight = [];
+            if(m.resolvedAt){ headerRight.push(`<span class='inline-flex items-center gap-1 px-1.5 py-0.5 rounded border'>Resolved: ${m.resolvedAt?.toDate? m.resolvedAt.toDate().toLocaleString():''}</span>`); }
+            if(m.deletedAt){ headerRight.push(`<span class='inline-flex items-center gap-1 px-1.5 py-0.5 rounded border'>Deleted: ${m.deletedAt?.toDate? m.deletedAt.toDate().toLocaleString():''}</span>`); }
+            const ts = m.createdAt?.toDate ? m.createdAt.toDate().toLocaleString() : (m.createdAtMs ? new Date(m.createdAtMs).toLocaleString() : '');
+            headerRight.push(`<span>${ts}</span>`);
 
-          card.innerHTML = `
-            <div class="flex items-start gap-2">
-              <div class="text-sm font-medium">${who}</div>
-              <div class="ml-auto text-xs text-slate-600 flex items-center gap-2">${headerRight.join(' ')}</div>
-            </div>
-            <div class="mt-2 text-sm whitespace-pre-wrap">${esc(m.text||'')}</div>
-            <div class="mt-2 flex items-center gap-2" id="actions_${id}">
-              ${renderMessageButtonsHTML(m, id)}
-            </div>
-            <details class="mt-2" id="det_${id}">
-              <summary class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50 inline">Comments</summary>
-              <div class="mt-2 space-y-2" id="cm_${id}"></div>
-              <div class="mt-2 flex items-center gap-2">
-                <input class="flex-1 border rounded-lg px-2 py-1 text-sm" placeholder="Write a comment…" id="cmi_${id}">
-                <button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="sendc" data-id="${id}">Send</button>
+            card.innerHTML = `
+              <div class="flex items-start gap-2">
+                <div class="text-sm font-medium">${who}</div>
+                <div class="ml-auto text-xs text-slate-600 flex items-center gap-2">${headerRight.join(' ')}</div>
               </div>
-            </details>
-          `;
+              <div class="mt-2 text-sm whitespace-pre-wrap">${esc(m.text||'')}</div>
+              <div class="mt-2 flex items-center gap-2" id="actions_${id}">
+                ${renderMessageButtonsHTML(m, id)}
+              </div>
+              <details class="mt-2" id="det_${id}">
+                <summary class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50 inline">Comments</summary>
+                <div class="mt-2 space-y-2" id="cm_${id}"></div>
+                <div class="mt-2 flex items-center gap-2">
+                  <input class="flex-1 border rounded-lg px-2 py-1 text-sm" placeholder="Write a comment…" id="cmi_${id}">
+                  <button class="text-xs px-2 py-1 rounded-md border hover:bg-slate-50" data-act="sendc" data-id="${id}">Send</button>
+                </div>
+              </details>
+            `;
 
-          wireMessageButtons(card, m, id);
+            wireMessageButtons(card, m, id);
 
-          card.querySelector('button[data-act="sendc"]').onclick = async ()=>{
-            const input = card.querySelector('#cmi_'+id); const text = input.value.trim(); if(!text) return;
-            await ensureAnon();
-            const u = auth.currentUser;
-            try{
-              await addDoc(collection(db,'messages', id, 'comments'), {
-                text, createdAt: serverTimestamp(), authorId: u?.uid||'anon', authorName: nameById(meId)||'Anon'
-              }); input.value='';
-            }catch(e){ console.error(e); alert('Failed'); }
-          };
+            card.querySelector('button[data-act="sendc"]').onclick = async ()=>{
+              const input = card.querySelector('#cmi_'+id); const text = input.value.trim(); if(!text) return;
+              await ensureAnon();
+              const u = auth.currentUser;
+              try{
+                await addDoc(collection(db,'messages', id, 'comments'), {
+                  text, createdAt: serverTimestamp(), createdAtMs: Date.now(),
+                  authorId: u?.uid||'anon', authorName: nameById(meId)||'Anon'
+                }); input.value='';
+              }catch(e){ console.error(e); alert('Failed'); }
+            };
 
-          $('#feed').appendChild(card);
+            $('#feed').appendChild(card);
 
-          const cq = query(collection(db,'messages', id, 'comments'), orderBy('createdAt','asc'));
-          const unsub = onSnapshot(cq, (cqs)=>{
-            const box = $('#cm_'+id); const det = $('#det_'+id); if(!box||!det) return; box.innerHTML='';
-            let count=0;
-            cqs.forEach(cs=>{
-              const c = cs.data();
-              const row=document.createElement('div'); row.className='text-xs';
-              row.innerHTML=`<span class="font-medium">${esc(c.authorName||'Anon')}:</span> ${esc(c.text||'')} <span class="text-slate-400">${c.createdAt?.toDate? c.createdAt.toDate().toLocaleString():''}</span>`;
-              box.appendChild(row); count++;
-            });
-            if(count>0) det.open = true;
+            const cq = query(collection(db,'messages', id, 'comments'), orderBy('createdAt','asc'));
+            const unsub = onSnapshot(cq, (cqs)=>{
+              const box = $('#cm_'+id); const det = $('#det_'+id); if(!box||!det) return; box.innerHTML='';
+              let count=0;
+              cqs.forEach(cs=>{
+                const c = cs.data();
+                const tss = c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString() : (c.createdAtMs ? new Date(c.createdAtMs).toLocaleString() : '');
+                const row=document.createElement('div'); row.className='text-xs';
+                row.innerHTML=`<span class="font-medium">${esc(c.authorName||'Anon')}:</span> ${esc(c.text||'')} <span class="text-slate-400">${tss}</span>`;
+                box.appendChild(row); count++;
+              });
+              if(count>0) det.open = true;
+            }, (err)=>{ console.error('comments onSnapshot error', err); });
+            commentUnsubs[id] = unsub;
           });
-          commentUnsubs[id] = unsub;
+        }, (err)=>{
+          console.warn('messages onSnapshot primary failed, falling back:', err?.message||err);
+          // fallback на orderBy(createdAt)
+          if(messagesUnsub){ try{ messagesUnsub(); }catch(_){ } }
+          const qy2 = makeMessagesQuery(false);
+          messagesUnsub = onSnapshot(qy2, (qs)=>{
+            const feed = $('#feed'); feed.innerHTML='';
+            qs.forEach(s=>{
+              // Повторяем тот же рендер (ради краткости вынесено выше, но оставим просто fallback)
+            });
+            // Для простоты: при фолбэке просто перезапускаем основную подписку,
+            // т.к. createdAt уже заполнится на сервере и очередной прогон отработает.
+            setTimeout(()=> resubscribeMessages(true), 800);
+          }, (err2)=> console.error('messages fallback onSnapshot error', err2));
         });
-      });
+      };
+      attach(true);
     }
 
     function renderMessageButtonsHTML(m, id){
@@ -553,7 +584,7 @@
               const u = auth.currentUser;
               await addDoc(collection(db,'messages'), {
                 text:`🔁 Counter-offer: ${alt}`,
-                createdAt: serverTimestamp(),
+                createdAt: serverTimestamp(), createdAtMs: Date.now(),
                 authorId: u?.uid||'anon',
                 authorName: nameById(myId)||'Anon',
                 kind:'swap_counter',
@@ -573,7 +604,7 @@
       await ensureAnon();
       const u = auth.currentUser;
       await addDoc(collection(db,'messages'), {
-        text, attachments: [], createdAt: serverTimestamp(), resolvedAt: null,
+        text, attachments: [], createdAt: serverTimestamp(), createdAtMs: Date.now(), resolvedAt: null,
         authorId: u?.uid||'anon', authorName: nameById(authorTeamId||meId)||'System',
         kind:'system', meta
       });
@@ -783,7 +814,6 @@
         };
         actionsEl.append(btnCover);
 
-        // Показать «Propose exchange…» только если у меня есть назначения
         if(iHaveAny){
           const btnEx = document.createElement('button'); btnEx.className='text-xs px-2 py-1 rounded-md border hover:bg-slate-50'; btnEx.textContent='Propose exchange…';
           btnEx.onclick = async ()=>{
@@ -800,7 +830,7 @@
                   const u = auth.currentUser;
                   await addDoc(collection(db,'messages'), {
                     text:`🔁 Swap offer: ${nameById(meId)||'Someone'} proposes exchange ${k} ⇄ ${alt}`,
-                    createdAt: serverTimestamp(),
+                    createdAt: serverTimestamp(), createdAtMs: Date.now(),
                     authorId: u?.uid||'anon',
                     authorName: nameById(meId)||'Anon',
                     kind:'swap_offer',
@@ -865,7 +895,7 @@
       const u = auth.currentUser;
       try{
         await addDoc(collection(db,'messages'), {
-          text, attachments: [], createdAt: serverTimestamp(), resolvedAt: null,
+          text, attachments: [], createdAt: serverTimestamp(), createdAtMs: Date.now(), resolvedAt: null,
           authorId: u?.uid||'anon', authorName: nameById(meId)||'Anon',
           kind:'user', meta:{}
         });
@@ -1011,17 +1041,19 @@
     }
 
     /**********************
-     * 12) Boot           *
+     * 12) Boot: ждём авторизацию, потом подписки
      **********************/
-    onAuthStateChanged(auth, async (u)=>{ if(!u) await signInAnonymously(auth); });
-    renderHeader();
-    renderCalendar();
-    subscribeRange();
-    resubscribeMessages();
-    setInterval(renderChecklist, 5000); renderChecklist();
-
-    // если «я» уже выбран — зафиксируем привязку uid->teamId (нужно для приватности)
-    (async () => { if(meId) await saveMyProfileTeam(false); })();
+    onAuthStateChanged(auth, async (u)=>{
+      if(!u){ await signInAnonymously(auth); return; }
+      // зафиксируем текущую роль для правил (если выбрано "I am")
+      await saveMyProfileTeam(false);
+      // теперь подписки
+      subscribeRange();
+      resubscribeMessages(true);
+      renderHeader();
+      renderCalendar();
+      renderChecklist();
+    });
   </script>
 </body>
 </html>
