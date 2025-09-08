@@ -111,7 +111,7 @@
   </main>
 
   <footer class="max-w-6xl mx-auto px-4 py-8 text-xs text-slate-500">
-    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v5.3
+    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v5.4
   </footer>
 
   <!-- MODAL: choose a date -->
@@ -257,12 +257,28 @@
       const u = auth.currentUser; if(!u) return;
       const pref = doc(db,'profiles', u.uid);
       const data = {};
-      if(meId) data.teamId = meId;
+      if(meId !== undefined) data.teamId = meId || null;
       if(isAdminOverride !== null) data.isAdmin = !!isAdminOverride;
 
       await setDoc(pref, data, { merge:true });
       await waitForPendingWrites(db);
       try { await getDoc(pref); } catch(_) {}
+    }
+
+    function subscribeProfile(){
+      if(profileUnsub){ try{ profileUnsub(); }catch(_){} profileUnsub=null; }
+      const u = auth.currentUser; if(!u) return;
+      profileUnsub = onSnapshot(doc(db,'profiles',u.uid), (snap)=>{
+        const data = snap.data()||{};
+        const wasAdmin = adminOK;
+        // синхронизируем админ-флаг с сервера
+        adminOK = !!data.isAdmin;
+        // если teamId в профиле есть и локально пусто — подхватим
+        if(!meId && data.teamId){ meId = data.teamId; localStorage.setItem('labduty_meId',meId); }
+        renderHeader();
+        // при изменении админ-флага — полностью перебираем ленту
+        if(wasAdmin !== adminOK){ resubscribeMessages(); }
+      });
     }
 
     /******** 5) Identity/Admin UI ********/
@@ -274,7 +290,7 @@
           await saveMyProfileTeam(true);
         }else{
           alert('Wrong code');
-          adminOK=false; meId=null;
+          adminOK=false; // не включаем
           await saveMyProfileTeam(false);
         }
       }else{
@@ -282,6 +298,7 @@
         if(meId) localStorage.setItem('labduty_meId',meId); else localStorage.removeItem('labduty_meId');
         await saveMyProfileTeam(false);
       }
+      // сервер сам вернёт актуальный adminOK через subscribeProfile()
       renderHeader();
       resubscribeMessages();
       renderChecklist();
@@ -380,14 +397,6 @@
     }
 
     /******** 7) Messages ********/
-    function subscribeProfile(){
-      if(profileUnsub){ try{ profileUnsub(); }catch(_){} profileUnsub=null; }
-      const u = auth.currentUser; if(!u) return;
-      profileUnsub = onSnapshot(doc(db,'profiles',u.uid), ()=>{
-        resubscribeMessages();
-      });
-    }
-
     function resubscribeMessages(){
       if(messagesUnsub){ try{ messagesUnsub(); }catch(_){} messagesUnsub=null; }
       Object.values(commentUnsubs).forEach(unsub => { try{ unsub(); }catch(_){} });
@@ -415,23 +424,18 @@
           return true;
         });
 
+        // сортировка по времени
         filtered.sort((a,b)=>{
           const ta = (a.m.createdAtMs??0) || (a.m.createdAt?.toMillis?.()||0);
           const tb = (b.m.createdAtMs??0) || (b.m.createdAt?.toMillis?.()||0);
           return tb - ta;
         });
 
-        const cutoff = Date.now() - 24*3600*1000;
         const feed = $('#feed'); feed.innerHTML='';
 
         filtered.forEach(({id,m})=>{
-          const resolvedMs = m.resolvedAt?.toMillis ? m.resolvedAt.toMillis() : (m.resolvedAt? new Date(m.resolvedAt).getTime() : null);
           const deletedMs = m.deletedAt?.toMillis ? m.deletedAt.toMillis() : (m.deletedAt? new Date(m.deletedAt).getTime() : null);
-
-          if(!adminOK){
-            if(deletedMs) return;
-            if(resolvedMs && resolvedMs < cutoff) return;
-          }
+          if(!adminOK && deletedMs) return; // скрываем удалённые для не-админа
 
           const isSwap = (m.kind==='swap_offer' || m.kind==='swap_counter' || (m.kind==='system' && (m.meta?.type==='swap_accept' || m.meta?.type==='swap_done')));
           const isCongrats = (m.kind==='system' && m.meta?.type==='checklist_done');
@@ -951,9 +955,6 @@
     $('#btnDone').addEventListener('click', async ()=>{
       const k = toKey(new Date());
       const d = daysMap[k] || { assignees:[], checklist:{} };
-      const assigned = d.assignees||[];
-      const isMine = meId && assigned.includes(meId);
-
       const allOk = CHECKITEMS.every(it => (daysMap[k]?.checklist) && daysMap[k].checklist[it.id]);
       if(!allOk){ alert('Please complete all checklist items.'); return; }
 
@@ -1029,7 +1030,7 @@
     onAuthStateChanged(auth, async (u)=>{
       if(!u){ await signInAnonymously(auth); return; }
       await saveMyProfileTeam(false);  // профиль на сервере ДО подписок
-      subscribeProfile();
+      subscribeProfile();              // будет держать adminOK и meId в синхроне с сервером
       subscribeRange();
       resubscribeMessages();
       renderHeader();
