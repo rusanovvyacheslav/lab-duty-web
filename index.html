@@ -111,7 +111,7 @@
   </main>
 
   <footer class="max-w-6xl mx-auto px-4 py-8 text-xs text-slate-500">
-    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v5.4
+    Single-file app. Firebase Auth (anonymous) + Firestore. No Storage. v5.5
   </footer>
 
   <!-- MODAL: choose a date -->
@@ -156,32 +156,11 @@
     ];
     const ADMIN_ID = 'admin';
     const ADMIN_LABEL = 'Administrator';
-    const ADMIN_CODE = 'admin-code-CHANGE-ME'; // ← ЗАМЕНИТЕ
+    const ADMIN_CODE = 'admin-code-0'; // ← как в изначальном коде
 
-    // Праздники (пример FR 2025–2026)
     const HOLIDAYS = {
-      '2025-01-01':'New Year',
-      '2025-04-21':'Easter Monday',
-      '2025-05-01':'Labour Day',
-      '2025-05-08':'Victory in Europe Day',
-      '2025-05-29':'Ascension Day',
-      '2025-06-09':'Whit Monday',
-      '2025-07-14':'Bastille Day',
-      '2025-08-15':'Assumption',
-      '2025-11-01':'All Saints’ Day',
-      '2025-11-11':'Armistice Day',
-      '2025-12-25':'Christmas',
-      '2026-01-01':'New Year',
-      '2026-04-06':'Easter Monday',
-      '2026-05-01':'Labour Day',
-      '2026-05-08':'Victory in Europe Day',
-      '2026-05-14':'Ascension Day',
-      '2026-05-25':'Whit Monday',
-      '2026-07-14':'Bastille Day',
-      '2026-08-15':'Assumption',
-      '2026-11-01':'All Saints’ Day',
-      '2026-11-11':'Armistice Day',
-      '2026-12-25':'Christmas'
+      '2025-01-01':'New Year','2025-04-21':'Easter Monday','2025-05-01':'Labour Day','2025-05-08':'Victory in Europe Day','2025-05-29':'Ascension Day','2025-06-09':'Whit Monday','2025-07-14':'Bastille Day','2025-08-15':'Assumption','2025-11-01':'All Saints’ Day','2025-11-11':'Armistice Day','2025-12-25':'Christmas',
+      '2026-01-01':'New Year','2026-04-06':'Easter Monday','2026-05-01':'Labour Day','2026-05-08':'Victory in Europe Day','2026-05-14':'Ascension Day','2026-05-25':'Whit Monday','2026-07-14':'Bastille Day','2026-08-15':'Assumption','2026-11-01':'All Saints’ Day','2026-11-11':'Armistice Day','2026-12-25':'Christmas'
     };
 
     const FIREBASE_CONFIG = {
@@ -209,7 +188,7 @@
     import { getAuth, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
     import {
       getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, query, where, orderBy,
-      serverTimestamp, addDoc, waitForPendingWrites
+      serverTimestamp, addDoc
     } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
     const app = initializeApp(FIREBASE_CONFIG);
@@ -239,7 +218,7 @@
     /******** 3) State ********/
     let cursor = startOfMonth(new Date());
     let spanMonths = 1;
-    let meId = localStorage.getItem('labduty_meId');
+    let meId = localStorage.getItem('labduty_meId') || null;
     let adminOK = false;
 
     const daysMap = {};
@@ -249,7 +228,9 @@
     const commentUnsubs = {};
     let messagesCache = {}; // id -> message
 
-    async function ensureAnon(){ if(!auth.currentUser) await signInAnonymously(auth); }
+    async function ensureAnon(){
+      if(!auth.currentUser){ await signInAnonymously(auth); }
+    }
 
     /******** 4) Profiles ********/
     async function saveMyProfileTeam(isAdminOverride=null){
@@ -257,12 +238,18 @@
       const u = auth.currentUser; if(!u) return;
       const pref = doc(db,'profiles', u.uid);
       const data = {};
-      if(meId !== undefined) data.teamId = meId || null;
+      // Пишем teamId только если он непустой string
+      if(typeof meId === 'string' && meId.trim()) data.teamId = meId.trim();
       if(isAdminOverride !== null) data.isAdmin = !!isAdminOverride;
 
-      await setDoc(pref, data, { merge:true });
-      await waitForPendingWrites(db);
-      try { await getDoc(pref); } catch(_) {}
+      if(Object.keys(data).length===0) return; // нечего писать — выходим
+
+      try{
+        await setDoc(pref, data, { merge:true });
+      }catch(e){
+        console.error('saveMyProfileTeam failed', e);
+        alert('Failed to save profile; check Firestore rules & network.');
+      }
     }
 
     function subscribeProfile(){
@@ -271,14 +258,11 @@
       profileUnsub = onSnapshot(doc(db,'profiles',u.uid), (snap)=>{
         const data = snap.data()||{};
         const wasAdmin = adminOK;
-        // синхронизируем админ-флаг с сервера
         adminOK = !!data.isAdmin;
-        // если teamId в профиле есть и локально пусто — подхватим
-        if(!meId && data.teamId){ meId = data.teamId; localStorage.setItem('labduty_meId',meId); }
+        if(!meId && typeof data.teamId === 'string' && data.teamId){ meId = data.teamId; localStorage.setItem('labduty_meId',meId); }
         renderHeader();
-        // при изменении админ-флага — полностью перебираем ленту
         if(wasAdmin !== adminOK){ resubscribeMessages(); }
-      });
+      }, (err)=> console.error('profile onSnapshot error', err));
     }
 
     /******** 5) Identity/Admin UI ********/
@@ -290,7 +274,7 @@
           await saveMyProfileTeam(true);
         }else{
           alert('Wrong code');
-          adminOK=false; // не включаем
+          adminOK=false;
           await saveMyProfileTeam(false);
         }
       }else{
@@ -298,7 +282,6 @@
         if(meId) localStorage.setItem('labduty_meId',meId); else localStorage.removeItem('labduty_meId');
         await saveMyProfileTeam(false);
       }
-      // сервер сам вернёт актуальный adminOK через subscribeProfile()
       renderHeader();
       resubscribeMessages();
       renderChecklist();
@@ -344,7 +327,8 @@
     /******** 6) Days ********/
     function rangeKeyBounds(d, span){ const [a,b] = monthBounds(d, span); return [toKey(a), toKey(b)]; }
 
-    function subscribeRange(){
+    async function subscribeRange(){
+      await ensureAnon();
       if(rangeUnsub) rangeUnsub();
       const [a,b] = rangeKeyBounds(cursor, spanMonths);
       const qy = query(collection(db,'days'), where('date','>=',a), where('date','<=',b), orderBy('date','asc'));
@@ -378,7 +362,6 @@
       const wasSet = set.has(whoId);
       if(set.has(whoId)) set.delete(whoId); else set.add(whoId);
       await updateDoc(ref, { swapRequestedIds:[...set], updatedAt: serverTimestamp() });
-      // Если пользователь снял флаг — закрыть все его офферы по этому дню
       if(wasSet){ await resolvePendingSwapMessages(dayKey, whoId); }
     }
 
@@ -397,7 +380,8 @@
     }
 
     /******** 7) Messages ********/
-    function resubscribeMessages(){
+    async function resubscribeMessages(){
+      await ensureAnon();
       if(messagesUnsub){ try{ messagesUnsub(); }catch(_){} messagesUnsub=null; }
       Object.values(commentUnsubs).forEach(unsub => { try{ unsub(); }catch(_){} });
       for(const k in commentUnsubs) delete commentUnsubs[k];
@@ -421,7 +405,7 @@
             const byMeta = meId && m.meta && (m.meta.from===meId || m.meta.to===meId);
             return byVis || byMeta;
           }
-          return true;
+          return true; // обычные сообщения видны всем аутентифицированным
         });
 
         // сортировка по времени
@@ -435,7 +419,7 @@
 
         filtered.forEach(({id,m})=>{
           const deletedMs = m.deletedAt?.toMillis ? m.deletedAt.toMillis() : (m.deletedAt? new Date(m.deletedAt).getTime() : null);
-          if(!adminOK && deletedMs) return; // скрываем удалённые для не-админа
+          if(!adminOK && deletedMs) return;
 
           const isSwap = (m.kind==='swap_offer' || m.kind==='swap_counter' || (m.kind==='system' && (m.meta?.type==='swap_accept' || m.meta?.type==='swap_done')));
           const isCongrats = (m.kind==='system' && m.meta?.type==='checklist_done');
@@ -641,7 +625,6 @@
       );
     }
 
-    // Закрытие незавершённых своп-офферов при отмене флага
     async function resolvePendingSwapMessages(dateKey, teamId){
       const entries = Object.entries(messagesCache);
       const toClose = entries.filter(([id,m]) =>
@@ -735,7 +718,6 @@
       span.className = 'group inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ' + (needSwap? 'bg-amber-100 border-amber-300 text-amber-900':'bg-slate-50');
       span.textContent = name;
 
-      // toggle swap (only self)
       span.addEventListener('click', async (e)=>{
         e.stopPropagation(); if(!mine) return;
         const set = new Set(daysMap[dayKey]?.swapRequestedIds||[]);
@@ -744,7 +726,6 @@
         try{ await toggleSwap(dayKey, whoId); }catch(err){ console.error(err); alert('Failed'); }
       });
 
-      // remove (admin)
       if(adminOK){
         const x=document.createElement('button'); x.textContent='×'; x.title='Remove from day'; x.className='ml-1 opacity-50 hover:opacity-100';
         x.addEventListener('click', async (e)=>{
@@ -787,12 +768,10 @@
       chipsEl.innerHTML='';
       (d.assignees||[]).forEach(id=>{ const nm = nameById(id)||id; chipsEl.appendChild(chip(nm,id,k)); });
 
-      // badges
       badgesEl.innerHTML='';
       const swapCount = (d.swapRequestedIds||[]).length;
       if(swapCount>0){ const b = document.createElement('span'); b.className='inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-800'; b.textContent = 'swap ×'+swapCount; badgesEl.appendChild(b); }
 
-      // actions
       actionsEl.innerHTML='';
       const mine = meId && (d.assignees||[]).includes(meId);
       const iHaveAny = hasAnyAssigned(meId);
@@ -931,7 +910,6 @@
           cb.addEventListener('change', async ()=>{
             const cc = { ...(daysMap[k]?.checklist||{}) }; cc[it.id] = cb.checked ? (meId||true) : null;
             try{ await saveChecklist(k, cc); }catch(e){ console.error(e); alert('Failed to save'); }
-            // обновить кнопку
             const local = daysMap[k] || { checklist:{} }; local.checklist = cc; daysMap[k] = local;
             updateDoneBtn();
           });
@@ -1029,10 +1007,10 @@
     /******** 12) Boot ********/
     onAuthStateChanged(auth, async (u)=>{
       if(!u){ await signInAnonymously(auth); return; }
-      await saveMyProfileTeam(false);  // профиль на сервере ДО подписок
-      subscribeProfile();              // будет держать adminOK и meId в синхроне с сервером
-      subscribeRange();
-      resubscribeMessages();
+      await saveMyProfileTeam(false);   // не пишем teamId=null
+      subscribeProfile();
+      await subscribeRange();           // ждём auth
+      await resubscribeMessages();      // ждём auth
       renderHeader();
       renderCalendar();
       renderChecklist();
