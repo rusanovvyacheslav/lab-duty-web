@@ -349,9 +349,9 @@
     async function setAssignees(dayKey, ids){
       const ref = doc(db,'days',dayKey);
       const snap = await getDoc(ref);
-      const base = snap.exists()? migrateDay(snap.data()) : { date:dayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+      const base = snap.exists()? migrateDay(snap.data()) : { date: dayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
       const newSwaps = (base.swapRequestedIds||[]).filter(x=> ids.includes(x));
-      await setDoc(ref, { ...base, assignees: ids, swapRequestedIds: newSwaps, updatedAt: serverTimestamp() });
+      await setDoc(ref, { ...base, date: dayKey, assignees: ids, swapRequestedIds: newSwaps, updatedAt: serverTimestamp() });
     }
 
     async function toggleSwap(dayKey, whoId){
@@ -368,16 +368,17 @@
     async function saveChecklist(todayKey, checklist){
       const ref = doc(db,'days',todayKey);
       const snap = await getDoc(ref);
-      const base = snap.exists()? migrateDay(snap.data()) : { date:todayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
-      await setDoc(ref,{ ...base, checklist, updatedAt: serverTimestamp() });
+      const base = snap.exists()? migrateDay(snap.data()) : { date: todayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+      await setDoc(ref, { ...base, date: todayKey, checklist, updatedAt: serverTimestamp() });
     }
 
     async function markDone(todayKey){
       const ref = doc(db,'days',todayKey);
       const snap = await getDoc(ref);
-      const base = snap.exists()? migrateDay(snap.data()) : { date:todayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
-      await setDoc(ref,{ ...base, doneAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      const base = snap.exists()? migrateDay(snap.data()) : { date: todayKey, assignees:[], swapRequestedIds:[], note:'', checklist:{} };
+      await setDoc(ref, { ...base, date: todayKey, doneAt: serverTimestamp(), updatedAt: serverTimestamp() });
     }
+
 
     /******** 7) Messages ********/
     function clearMessageSubs(){
@@ -491,6 +492,8 @@
           }); input.value='';
         }catch(e){ console.error(e); alert('Failed'); }
       };
+
+      subscribeCommentsFor(id);      
     }
 
     function renderMessageButtonsHTML(m, id){
@@ -545,7 +548,7 @@
       if(bDecl) bDecl.onclick = async ()=>{ try{
         await ensureAnon();
         await updateDoc(doc(db,'messages', id), { resolvedAt: serverTimestamp(), deletedAt: serverTimestamp() });
-        await addSystemMsg(`❌ Swap offer declined.`, { ref:id }, m.meta?.from || m.from || meId);
+        await addSystemMsg(`❌ Swap offer declined.`, { ref:id }, meId);
       }catch(e){ console.error(e); alert('Failed'); } };
 
       const bCtr = card.querySelector('button[data-act="swap_counter"]');
@@ -637,6 +640,41 @@
         catch(e){ console.error('resolvePendingSwapMessages',e); }
       }
     }
+    function subscribeCommentsFor(msgId){
+      // Уже подписаны — выходим
+      if(commentUnsubs[msgId]) return;
+    
+      const q = query(
+        collection(db, 'messages', msgId, 'comments'),
+        orderBy('createdAt', 'asc')
+      );
+    
+      commentUnsubs[msgId] = onSnapshot(q, (qs)=>{
+        const box = document.getElementById('cm_'+msgId);
+        if(!box) return;
+        box.innerHTML = '';
+    
+        qs.forEach(ds=>{
+          const c = ds.data() || {};
+          const line = document.createElement('div');
+          line.className = 'text-xs rounded-md border px-2 py-1 bg-slate-50';
+          const ts = c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString() : '';
+          line.innerHTML = `
+            <div class="flex items-center gap-2">
+              <span class="font-medium">${esc(c.authorName||'Anon')}</span>
+              <span class="text-slate-500">${ts}</span>
+            </div>
+            <div class="mt-1 whitespace-pre-wrap">${esc(c.text||'')}</div>
+          `;
+          box.appendChild(line);
+        });
+    
+        // если есть комментарии — автораскрыть блок
+        const det = document.getElementById('det_'+msgId);
+        if(det && qs.size>0) det.open = true;
+      }, (err)=> console.error('comments error', err));
+    }
+
 
     /******** 8) Calendar UI ********/
     function renderMonthBlock(baseDate){
